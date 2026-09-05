@@ -1,0 +1,35 @@
+server:
+  port: 8080
+  servlet:
+    context-path: /
+
+spring:
+  application:
+    name: fixloop-backend
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:fixloop_db}
+    username: ${POSTGRES_USER:fixloop_user}
+    password: ${POSTGRES_PASSWORD:fixloop_secret}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+# FixLoop JWT Security
+security:
+  jwt:
+    secret-key: 404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
+    expiration-time-ms: 86400000 # 24 Hours
+
+# Dynamic Priority Scoring Default Weights
+fixloop:
+  priority:
+    w1: 0.48 # severity_norm
+    w2: 0.21 # scale_norm
+    w3: 0.08 # recurrence_norm
+    w4: 0.23 # time_urgency_norm

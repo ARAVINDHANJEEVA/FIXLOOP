@@ -1,46 +1,81 @@
-# Getting Started with Create React App
+# FIXLOOP — Unified Campus Incident Resolution & Triage Platform
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+FixLoop is an enterprise-grade campus grievance management platform that provides a single point of intake for students, central triage with dynamic priority scoring for administrators, and scoped dispatch queues for workforce staff.
 
-## Available Scripts
+---
 
-In the project directory, you can run:
+## 1. Repository Architecture
 
-### `npm start`
+```
+FIXLOOP/
+├── backend/                 # Spring Boot 3.3.x (Java 21, Spring Security, JPA, WebSocket)
+├── web/                     # React + TypeScript Dashboard (Admin Central Triage & Staff Queue)
+├── mobile/                  # Android Student Application (Kotlin & Jetpack Compose)
+├── docker/                  # Docker Compose Infrastructure (PostgreSQL 16)
+├── docs/                    # Architecture Specs, ERD, API Contracts & Workflows
+└── README.md
+```
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+---
 
-The page will reload if you make edits.\
-You will also see any lint errors in the console.
+## 2. Component Directory Overview
 
-### `npm test`
+| Directory | Stack | Description |
+|---|---|---|
+| [`web/`](./web) | React 18, TypeScript, Framer Motion, Recharts | Shared administrative and staff portal with role-based routing (`/admin/*`, `/staff/*`), real-time global search (`Ctrl+K`), confidential vaults (Anti-Ragging, Harassment, Malpractice), and dynamic formula inspection. |
+| [`backend/`](./backend) | Spring Boot 3.3, Java 21, JPA/Hibernate, PostgreSQL, STOMP | RESTful API and WebSocket backend managing authentication, role-based JWT clearance, SLA escalation cron jobs, and intelligent dispatch. |
+| [`mobile/`](./mobile) | Kotlin, Jetpack Compose, Retrofit, Room, FCM | Native Android student mobile application supporting dynamic category forms, token tracking, offline drafts, and push updates. |
+| [`docker/`](./docker) | Docker Compose, PostgreSQL 16 Alpine | Local database container with persistent named volume and health checks. |
+| [`docs/`](./docs) | Mermaid ERD, OpenAPI specs, System Requirements | Architectural documentation, database schema definitions, and API specifications. |
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+---
 
-### `npm run build`
+## 3. Dynamic Priority Scoring Engine
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+FixLoop computes priority through a multi-factor normalized equation:
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+$$\begin{aligned}
+\text{severity\_norm} &= \frac{\text{severity}}{5} \\
+\text{scale\_norm} &= \frac{\ln(1 + \text{students\_affected})}{\ln(1 + 500)} \quad (\text{capped at } 500 \text{ students}) \\
+\text{recurrence\_norm} &= \frac{\min(\text{recurrence\_count\_last\_90\_days}, 10)}{10} \\
+\text{time\_urgency\_norm} &= \min\left(\frac{\text{hours\_since\_created}}{\text{sla\_hours}}, 1.0\right) \\[8pt]
+\mathbf{\text{priority\_score}} &= (0.48 \times \text{severity\_norm}) + (0.21 \times \text{scale\_norm}) \\
+&\quad + (0.08 \times \text{recurrence\_norm}) + (0.23 \times \text{time\_urgency\_norm})
+\end{aligned}$$
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+---
 
-### `npm run eject`
+## 4. Quick Start Guide
 
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
+### 4.1 Database (Docker)
+```bash
+cd docker
+docker compose up -d
+```
+Database URL: `jdbc:postgresql://localhost:5432/fixloop_db` (user: `fixloop_user`, password: `fixloop_secret`)
 
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+### 4.2 Web Dashboard (React)
+```bash
+cd web
+npm install
+npm start
+```
+Runs at `http://localhost:3000`. Test accounts:
+- **Admin**: `admin@fixloop.edu`
+- **Staff**: `staff@fixloop.edu`
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
+### 4.3 Backend Service (Spring Boot)
+```bash
+cd backend
+./mvnw spring-boot:run
+```
+Runs at `http://localhost:8080`.
 
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
-
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
+### 4.4 Mobile App (Kotlin)
+Connect your Android phone wirelessly via ADB and reverse the port:
+```bash
+adb pair <PHONE_IP>:<PORT>
+adb connect <PHONE_IP>:<PORT>
+adb reverse tcp:8080 tcp:8080
+```
+Open `mobile/` in Android Studio and run on device.
