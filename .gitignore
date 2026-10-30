@@ -25,6 +25,10 @@ docker/.env
 *.keystore
 *.pk8
 *.der
+*.asc
+id_rsa*
+id_ed25519*
+.ssh/
 
 # Cloud & Third-Party Service Credentials
 google-services.json
@@ -62,6 +66,19 @@ desktop.ini
 .settings/
 *.sublime-project
 *.sublime-workspace
+.history/
+*.swp
+*.swo
+*~
+*.orig
+*.rej
+*.bak
+
+# AI Assistant & Tool Caches / Configs
+.gemini/
+.cursor/
+.claude/
+.antigravity/
 
 # ------------------------------------------------------------------------------
 # 3. Documentation, Internal Specs, Blueprints & Plans
@@ -69,7 +86,19 @@ desktop.ini
 # ------------------------------------------------------------------------------
 docs/
 *.md
+*.MD
+*.markdown
+*.mdown
+*.mkd
+*.mkdn
 !/README.md
+!/README.MD
+
+# Plans, Blueprints & Notes
+plan/
+plans/
+*.plan
+*.drawio.bkp
 
 # ------------------------------------------------------------------------------
 # 4. Private / Prototype Demos
@@ -121,6 +150,8 @@ mobile/captures/
 .externalNativeBuild/
 mobile/.externalNativeBuild/
 mobile/app/.externalNativeBuild/
+.kotlin/
+mobile/.kotlin/
 
 # Python & Runtime Artifacts
 __pycache__/

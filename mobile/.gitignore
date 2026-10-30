@@ -8,9 +8,12 @@ local.properties
 /captures
 .externalNativeBuild
 .cxx
+.kotlin
 *.apk
 *.aab
 *.jks
 *.keystore
 google-services.json
 *.log
+*.md
+*.MD
