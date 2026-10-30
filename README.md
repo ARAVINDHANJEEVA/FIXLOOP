@@ -81,8 +81,7 @@ docker compose up -d
 ```
 - **Host**: `localhost:5432`
 - **Database**: `fixloop_db`
-- **User**: `fixloop_user`
-- **Password**: `fixloop_secret` (default local dev password, override via env in production)
+- *(Connection credentials for database inspection tools like pgAdmin/DBeaver are defined in `docker/.env.example`)*
 
 ### 5.3 Step 2: Backend Service (Spring Boot)
 ```bash
