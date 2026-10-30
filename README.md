@@ -40,12 +40,12 @@ FIXLOOP/
 FixLoop automatically ranks campus grievances using a normalized multi-factor priority algorithm:
 
 $$\begin{aligned}
-\text{severity\_norm} &= \frac{\text{severity}}{5} \\
-\text{scale\_norm} &= \frac{\ln(1 + \text{students\_affected})}{\ln(1 + 500)} \quad (\text{capped at } 500 \text{ students}) \\
-\text{recurrence\_norm} &= \frac{\min(\text{recurrence\_count\_last\_90\_days}, 10)}{10} \\
-\text{time\_urgency\_norm} &= \min\left(\frac{\text{hours\_since\_created}}{\text{sla\_hours}}, 1.0\right) \\[8pt]
-\mathbf{\text{priority\_score}} &= (0.48 \times \text{severity\_norm}) + (0.21 \times \text{scale\_norm}) \\
-&\quad + (0.08 \times \text{recurrence\_norm}) + (0.23 \times \text{time\_urgency\_norm})
+\text{severity}_{\text{norm}} &= \frac{\text{severity}}{5} \\
+\text{scale}_{\text{norm}} &= \frac{\ln(1 + \text{students affected})}{\ln(1 + 500)} \quad (\text{capped at } 500 \text{ students}) \\
+\text{recurrence}_{\text{norm}} &= \frac{\min(\text{recurrence count (90 days)}, 10)}{10} \\
+\text{urgency}_{\text{norm}} &= \min\left(\frac{\text{hours elapsed}}{\text{SLA hours}}, 1.0\right) \\[8pt]
+\mathbf{\text{Priority Score}} &= (0.48 \times \text{severity}_{\text{norm}}) + (0.21 \times \text{scale}_{\text{norm}}) \\
+&\quad + (0.08 \times \text{recurrence}_{\text{norm}}) + (0.23 \times \text{urgency}_{\text{norm}})
 \end{aligned}$$
 
 Weights ($w_1=0.48, w_2=0.21, w_3=0.08, w_4=0.23$) can be adjusted in real-time by administrators via the Web Settings panel.
