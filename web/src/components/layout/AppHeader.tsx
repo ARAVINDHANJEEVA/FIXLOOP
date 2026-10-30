@@ -9,7 +9,8 @@ import {
 } from 'lucide-react';
 import NotificationBell from './NotificationBell';
 import { useAuth } from '../../hooks/useAuth';
-import { mockComplaints } from '../../data/mockData';
+import { complaintApi } from '../../api';
+import { Complaint } from '../../types';
 import {
   formatReportedDateTime,
   getCategoryColor,
@@ -38,6 +39,7 @@ const AppHeader: React.FC = () => {
   const [query, setQuery] = useState('');
   const [isOpen, setIsOpen] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [liveComplaints, setLiveComplaints] = useState<Complaint[]>([]);
 
   const searchContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -50,6 +52,22 @@ const AppHeader: React.FC = () => {
 
   const breadcrumb = matchedEntry?.[1] ?? 'Dashboard';
   const section = user?.role === 'ADMIN' ? 'Admin Portal' : 'Staff Portal';
+
+  useEffect(() => {
+    const fetchSearchSuggestions = async () => {
+      try {
+        const res = user?.role === 'STAFF'
+          ? await complaintApi.getStaffQueue({ size: 50 })
+          : await complaintApi.getAdminQueue({ size: 50 });
+        setLiveComplaints(res.content || []);
+      } catch {
+        setLiveComplaints([]);
+      }
+    };
+    if (user) {
+      fetchSearchSuggestions();
+    }
+  }, [user]);
 
   // Global keyboard shortcut: Ctrl+K / Cmd+K to focus search, Escape to close
   useEffect(() => {
@@ -85,10 +103,10 @@ const AppHeader: React.FC = () => {
     const trimmed = query.trim().toLowerCase();
     if (!trimmed) {
       // If empty and open, show latest 5 complaints as quick suggestions
-      return mockComplaints.slice(0, 5);
+      return liveComplaints.slice(0, 5);
     }
 
-    return mockComplaints
+    return liveComplaints
       .filter((c) => {
         const tokenMatch = c.token.toLowerCase().includes(trimmed);
         const descMatch = c.description.toLowerCase().includes(trimmed);
@@ -100,7 +118,7 @@ const AppHeader: React.FC = () => {
         return tokenMatch || descMatch || catMatch || bldgMatch || roomMatch || studentMatch || staffMatch;
       })
       .slice(0, 8); // Top 8 relevant matches
-  }, [query]);
+  }, [query, liveComplaints]);
 
   // Reset selected index when query changes
   useEffect(() => {
@@ -211,7 +229,7 @@ const AppHeader: React.FC = () => {
                     <Search size={22} style={{ color: 'var(--text-3)', margin: '0 auto 8px', display: 'block' }} />
                     <div style={{ fontWeight: 700, fontSize: '0.84rem', color: 'var(--text-1)' }}>No complaints found</div>
                     <div style={{ fontSize: '0.74rem', color: 'var(--text-3)', marginTop: 3 }}>
-                      Try searching with a token like <strong>SNT-2026</strong>, building name, or keyword.
+                      Try searching with a token like <strong>FXL-2026</strong>, building name, or keyword.
                     </div>
                   </div>
                 ) : (

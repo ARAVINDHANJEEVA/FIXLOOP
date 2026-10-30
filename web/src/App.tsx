@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from './hooks/useAuth';
 import { ToastProvider } from './hooks/useToast';
 import { ThemeProvider } from './hooks/useTheme';
+import { RealtimeProvider } from './context/RealtimeContext';
 import AppRouter from './routes/AppRouter';
 import './index.css';
 
@@ -18,7 +19,9 @@ function App() {
       <ThemeProvider>
         <AuthProvider>
           <ToastProvider>
-            <AppRouter />
+            <RealtimeProvider>
+              <AppRouter />
+            </RealtimeProvider>
           </ToastProvider>
         </AuthProvider>
       </ThemeProvider>

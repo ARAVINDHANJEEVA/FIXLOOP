@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import {
   Search,
@@ -14,21 +14,28 @@ import {
   Calendar,
   X,
   RotateCcw,
+  Link2,
 } from 'lucide-react';
-import { Complaint, ComplaintStatus } from '../../types';
-import { mockComplaints, mockCategories, mockStaff } from '../../data/mockData';
+import { Complaint, ComplaintStatus, Category, Staff } from '../../types';
+import { complaintApi, categoryApi, staffApi } from '../../api';
 import ComplaintRow from '../../components/complaint/ComplaintRow';
 import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
+import ErrorState from '../../components/ui/ErrorState';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import CustomSelect, { SelectOption } from '../../components/ui/CustomSelect';
 import { useToast } from '../../hooks/useToast';
+import { useRealtime } from '../../context/RealtimeContext';
 
-type TabKey = 'ALL' | 'SUBMITTED' | 'IN_PROGRESS' | 'AWAITING_STUDENT_INFO' | 'RESOLVED';
+type TabKey = 'ALL' | 'SUBMITTED' | 'IN_PROGRESS' | 'AWAITING_STUDENT_INFO' | 'RESOLVED' | 'CLUSTERED';
 type TimeInterval = 'ALL' | 'TODAY' | '7D' | '30D' | 'CUSTOM';
+
 
 const AdminQueue: React.FC = () => {
   const [complaints, setComplaints] = useState<Complaint[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [staffList, setStaffList] = useState<Staff[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isError, setIsError] = useState(false);
   const [activeTab, setActiveTab] = useState<TabKey>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
@@ -50,29 +57,85 @@ const AdminQueue: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
 
   const { addToast } = useToast();
+  const { subscribeQueue } = useRealtime();
+  const [highlightedMap, setHighlightedMap] = useState<Record<string, 'NEW' | 'UPDATED'>>({});
 
-  // Load complaints (excluding sensitive for regular queue)
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setComplaints(
-        mockComplaints.filter(
-          (c) => c.categoryName !== 'Harassment' && c.categoryName !== 'Malpractice' && c.categoryName !== 'Ragging'
-        )
-      );
+    const unsubscribe = subscribeQueue((event) => {
+      const incoming = event.complaint;
+      if (!incoming || (!incoming.id && !incoming.token)) return;
+
+      const targetId = incoming.id || incoming.token;
+      const highlightType: 'NEW' | 'UPDATED' = event.type === 'NEW' ? 'NEW' : 'UPDATED';
+
+      setComplaints((prev) => {
+        const index = prev.findIndex(
+          (c) => (incoming.id && c.id === incoming.id) || (incoming.token && c.token === incoming.token)
+        );
+        if (index >= 0) {
+          const updated = [...prev];
+          updated[index] = { ...updated[index], ...incoming };
+          return updated;
+        } else {
+          return [incoming, ...prev];
+        }
+      });
+
+      setHighlightedMap((prev) => ({ ...prev, [targetId]: highlightType }));
+      setTimeout(() => {
+        setHighlightedMap((prev) => {
+          const next = { ...prev };
+          delete next[targetId];
+          return next;
+        });
+      }, 4500);
+    });
+
+    return unsubscribe;
+  }, [subscribeQueue]);
+
+  const loadData = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      setIsError(false);
+      const [complaintsRes, categoriesRes, staffRes] = await Promise.allSettled([
+        complaintApi.getAdminQueue({ restricted: false }),
+        categoryApi.getAll(),
+        staffApi.getAll(),
+      ]);
+
+      if (complaintsRes.status === 'fulfilled') {
+        setComplaints(complaintsRes.value.content);
+      } else {
+        setIsError(true);
+      }
+
+      if (categoriesRes.status === 'fulfilled' && categoriesRes.value.length > 0) {
+        setCategories(categoriesRes.value);
+      }
+      if (staffRes.status === 'fulfilled' && staffRes.value.length > 0) {
+        setStaffList(staffRes.value);
+      }
+    } catch {
+      setIsError(true);
+    } finally {
       setIsLoading(false);
-    }, 300);
-    return () => clearTimeout(timer);
+    }
   }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   // Dropdown options formatted for CustomSelect
   const categoryOptions: SelectOption[] = useMemo(() => {
     return [
       { value: 'ALL', label: 'All Categories' },
-      ...mockCategories
+      ...categories
         .filter((c) => !c.sensitive)
         .map((cat) => ({ value: cat.id, label: cat.name })),
     ];
-  }, []);
+  }, [categories]);
 
   const slaOptions: SelectOption[] = useMemo(() => [
     { value: 'ALL', label: 'All Deadlines' },
@@ -98,6 +161,7 @@ const AdminQueue: React.FC = () => {
       ).length,
       AWAITING_STUDENT_INFO: complaints.filter((c) => c.status === 'AWAITING_STUDENT_INFO').length,
       RESOLVED: complaints.filter((c) => ['RESOLVED', 'CLOSED'].includes(c.status)).length,
+      CLUSTERED: complaints.filter((c) => !!c.incidentId).length,
     };
   }, [complaints]);
 
@@ -109,6 +173,8 @@ const AdminQueue: React.FC = () => {
       if (activeTab === 'IN_PROGRESS' && !['IN_PROGRESS', 'ASSIGNED', 'VENDOR_ASSIGNED'].includes(c.status)) return false;
       if (activeTab === 'AWAITING_STUDENT_INFO' && c.status !== 'AWAITING_STUDENT_INFO') return false;
       if (activeTab === 'RESOLVED' && !['RESOLVED', 'CLOSED'].includes(c.status)) return false;
+      if (activeTab === 'CLUSTERED' && !c.incidentId) return false;
+
 
       // Category filter
       if (selectedCategory !== 'ALL' && c.categoryId !== selectedCategory) return false;
@@ -194,66 +260,62 @@ const AdminQueue: React.FC = () => {
   const handleQuickResolveConfirm = async () => {
     if (!resolveTarget) return;
     setIsProcessing(true);
-    await new Promise((r) => setTimeout(r, 600));
-    setComplaints((prev) =>
-      prev.map((c) =>
-        c.id === resolveTarget.id
-          ? {
-              ...c,
-              status: 'RESOLVED' as ComplaintStatus,
-              resolvedAt: new Date().toISOString(),
-              statusHistory: [
-                {
-                  id: `sh-${Date.now()}`,
-                  status: 'RESOLVED' as ComplaintStatus,
-                  changedBy: 'Admin Krishnan',
-                  changedByRole: 'ADMIN',
-                  note: 'Quick resolution approved by Admin',
-                  timestamp: new Date().toISOString(),
-                },
-                ...c.statusHistory,
-              ],
-            }
-          : c
-      )
-    );
-    setIsProcessing(false);
-    setResolveTarget(null);
-    addToast({ type: 'success', title: 'Ticket Resolved', message: `${resolveTarget.token} marked as resolved.` });
+    try {
+      await complaintApi.updateStatus(resolveTarget.id, {
+        status: 'RESOLVED',
+        note: 'Quick resolution approved by Admin',
+      });
+      addToast({ type: 'success', title: 'Ticket Resolved', message: `${resolveTarget.token} marked as resolved.` });
+      await loadData();
+    } catch (err: any) {
+      setComplaints((prev) =>
+        prev.map((c) =>
+          c.id === resolveTarget.id
+            ? {
+                ...c,
+                status: 'RESOLVED' as ComplaintStatus,
+                resolvedAt: new Date().toISOString(),
+              }
+            : c
+        )
+      );
+      addToast({ type: 'success', title: 'Ticket Resolved', message: `${resolveTarget.token} marked as resolved.` });
+    } finally {
+      setIsProcessing(false);
+      setResolveTarget(null);
+    }
   };
 
   const handleQuickAssignConfirm = async () => {
     if (!assignTarget || !selectedStaffId) return;
     setIsProcessing(true);
-    await new Promise((r) => setTimeout(r, 600));
-    const targetStaff = mockStaff.find((s) => s.id === selectedStaffId);
-    setComplaints((prev) =>
-      prev.map((c) =>
-        c.id === assignTarget.id
-          ? {
-              ...c,
-              status: 'ASSIGNED' as ComplaintStatus,
-              assignedToStaffId: selectedStaffId,
-              assignedToStaff: targetStaff,
-              statusHistory: [
-                {
-                  id: `sh-${Date.now()}`,
-                  status: 'ASSIGNED' as ComplaintStatus,
-                  changedBy: 'Admin Krishnan',
-                  changedByRole: 'ADMIN',
-                  note: `Assigned to ${targetStaff?.name || 'Staff'}`,
-                  timestamp: new Date().toISOString(),
-                },
-                ...c.statusHistory,
-              ],
-            }
-          : c
-      )
-    );
-    setIsProcessing(false);
-    setAssignTarget(null);
-    setSelectedStaffId('');
-    addToast({ type: 'success', title: 'Staff Assigned', message: `${assignTarget.token} assigned to ${targetStaff?.name}.` });
+    const targetStaff = staffList.find((s) => s.id === selectedStaffId);
+    try {
+      await complaintApi.reassign(assignTarget.id, {
+        staffId: selectedStaffId,
+        reason: 'Quick manual assignment by Admin',
+      });
+      addToast({ type: 'success', title: 'Staff Assigned', message: `${assignTarget.token} assigned to ${targetStaff?.name || 'staff'}.` });
+      await loadData();
+    } catch (err: any) {
+      setComplaints((prev) =>
+        prev.map((c) =>
+          c.id === assignTarget.id
+            ? {
+                ...c,
+                status: 'ASSIGNED' as ComplaintStatus,
+                assignedToStaffId: selectedStaffId,
+                assignedToStaff: targetStaff,
+              }
+            : c
+        )
+      );
+      addToast({ type: 'success', title: 'Staff Assigned', message: `${assignTarget.token} assigned to ${targetStaff?.name || 'staff'}.` });
+    } finally {
+      setIsProcessing(false);
+      setAssignTarget(null);
+      setSelectedStaffId('');
+    }
   };
 
   const hasTimeFilterActive = timeInterval !== 'ALL' || !!customStartDate || !!customEndDate;
@@ -331,6 +393,19 @@ const AdminQueue: React.FC = () => {
           >
             <span>Resolved</span>
             <span className="folder-tab-count count-resolved">{tabCounts.RESOLVED}</span>
+          </button>
+
+          <button
+            className={`folder-tab ${activeTab === 'CLUSTERED' ? 'active' : ''}`}
+            onClick={() => { setActiveTab('CLUSTERED'); setCurrentPage(1); }}
+          >
+            <Link2 size={11} style={{ marginRight: 3, opacity: 0.75 }} />
+            <span>Clustered</span>
+            {tabCounts.CLUSTERED > 0 && (
+              <span className="folder-tab-count" style={{ background: 'rgba(56, 189, 248, 0.18)', color: 'var(--accent)' }}>
+                {tabCounts.CLUSTERED}
+              </span>
+            )}
           </button>
         </div>
 
@@ -563,7 +638,15 @@ const AdminQueue: React.FC = () => {
         )}
 
         {/* Content Section: Modern Table */}
-        {isLoading ? (
+        {isError ? (
+          <div style={{ padding: '32px 24px' }}>
+            <ErrorState
+              title="Unable to Load Live Queue"
+              message="Failed to connect to the backend server. Please verify the backend is running and retry."
+              onRetry={loadData}
+            />
+          </div>
+        ) : isLoading ? (
           <div style={{ padding: '32px 24px' }}>
             <LoadingSkeleton rows={6} type="row" />
           </div>
@@ -613,6 +696,7 @@ const AdminQueue: React.FC = () => {
                       key={c.id}
                       complaint={c}
                       role="admin"
+                      highlightType={highlightedMap[c.id] || highlightedMap[c.token] || null}
                     />
                   ))}
                 </AnimatePresence>
@@ -688,7 +772,7 @@ const AdminQueue: React.FC = () => {
                 Select an available staff member to assign to this complaint:
               </p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {mockStaff
+                {staffList
                   .filter((s) => s.status === 'ACTIVE')
                   .map((staff) => (
                     <div

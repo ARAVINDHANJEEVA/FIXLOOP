@@ -11,27 +11,43 @@ import { truncate, getCategoryColor, formatDateTime, formatTimeAgo, formatReport
 interface ComplaintRowProps {
   complaint: Complaint;
   role: 'admin' | 'staff';
+  highlightType?: 'NEW' | 'UPDATED' | null;
 }
 
 const ComplaintRow: React.FC<ComplaintRowProps> = ({
   complaint,
   role,
+  highlightType,
 }) => {
   const navigate = useNavigate();
   const catColor = getCategoryColor(complaint.categoryName);
 
+  const rowHighlightClass = highlightType === 'NEW'
+    ? 'row-highlight-new'
+    : highlightType === 'UPDATED'
+    ? 'row-highlight-updated'
+    : '';
+
   return (
     <tr
-      className="modern-table-row clickable-table-row"
+      className={`modern-table-row clickable-table-row ${rowHighlightClass}`}
       onClick={() => navigate(`/${role}/complaint/${complaint.id}`)}
       title="Click to view complaint details"
     >
       {/* Token & Badges */}
       <td className="col-token">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <span className="table-token-badge">
-            {complaint.token}
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span className="table-token-badge">
+              {complaint.token}
+            </span>
+            {highlightType === 'NEW' && (
+              <span className="live-badge live-badge-new">NEW</span>
+            )}
+            {highlightType === 'UPDATED' && (
+              <span className="live-badge live-badge-updated">UPDATED</span>
+            )}
+          </div>
           <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
             {complaint.incidentCount && complaint.incidentCount > 1 && (
               <span className="cluster-badge" style={{ fontSize: '0.62rem' }}>
@@ -50,6 +66,22 @@ const ComplaintRow: React.FC<ComplaintRowProps> = ({
               </span>
             )}
           </div>
+          {/* Sibling IDs — comma display when complaint is part of a cluster */}
+          {complaint.siblingIds && complaint.siblingIds.length > 0 && (
+            <div
+              style={{
+                fontSize: '0.62rem',
+                fontFamily: 'monospace',
+                color: 'var(--accent)',
+                opacity: 0.85,
+                marginTop: 1,
+                lineHeight: 1.3,
+              }}
+              title={`Clustered with: #${[complaint.id, ...complaint.siblingIds].join(', #')}`}
+            >
+              🔗 #{[complaint.id, ...complaint.siblingIds].join(', #')}
+            </div>
+          )}
         </div>
       </td>
 

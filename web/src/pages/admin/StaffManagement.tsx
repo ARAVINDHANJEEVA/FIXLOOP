@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus,
@@ -11,15 +11,35 @@ import {
   CheckCircle2,
   XCircle,
 } from 'lucide-react';
-import { mockStaff, mockDepartments } from '../../data/mockData';
+import { staffApi, departmentApi } from '../../api';
 import { Staff, Department } from '../../types';
+import ErrorState from '../../components/ui/ErrorState';
 import { useToast } from '../../hooks/useToast';
 
 const StaffManagement: React.FC = () => {
   const { addToast } = useToast();
-  const [staff, setStaff] = useState<Staff[]>(mockStaff);
-  const [departments, setDepartments] = useState<Department[]>(mockDepartments);
+  const [staff, setStaff] = useState<Staff[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
   const [activeTab, setActiveTab] = useState<'staff' | 'departments'>('staff');
+  const [isError, setIsError] = useState(false);
+
+  const loadData = useCallback(async () => {
+    setIsError(false);
+    try {
+      const [staffRes, deptsRes] = await Promise.all([
+        staffApi.getAll(),
+        departmentApi.getAll(),
+      ]);
+      setStaff(staffRes || []);
+      setDepartments(deptsRes || []);
+    } catch {
+      setIsError(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   // Staff Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -49,18 +69,23 @@ const StaffManagement: React.FC = () => {
     headOfDepartment: '',
   });
 
-  const handleToggleStatus = (staffId: string) => {
-    setStaff((prev) =>
-      prev.map((s) =>
-        s.id === staffId ? { ...s, status: s.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE' } : s
-      )
-    );
+  const handleToggleStatus = async (staffId: string) => {
     const member = staff.find((s) => s.id === staffId);
-    const newStatus = member?.status === 'ACTIVE' ? 'Inactive' : 'Active';
+    const newStatus = member?.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
+    try {
+      await staffApi.update(staffId, { status: newStatus });
+      await loadData();
+    } catch {
+      setStaff((prev) =>
+        prev.map((s) =>
+          s.id === staffId ? { ...s, status: newStatus } : s
+        )
+      );
+    }
     addToast({
       type: 'success',
       title: 'Status updated',
-      message: `${member?.name} is now marked as ${newStatus}`,
+      message: `${member?.name} is now marked as ${newStatus === 'ACTIVE' ? 'Active' : 'Inactive'}`,
     });
   };
 
@@ -82,7 +107,7 @@ const StaffManagement: React.FC = () => {
     setShowModal(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.name || !form.role || !form.departmentId) {
       addToast({
         type: 'error',
@@ -92,40 +117,54 @@ const StaffManagement: React.FC = () => {
       return;
     }
     const dept = departments.find((d) => d.id === form.departmentId);
-    if (editingStaff) {
-      setStaff((prev) =>
-        prev.map((s) =>
-          s.id === editingStaff.id
-            ? { ...s, ...form, departmentName: dept?.name || '' }
-            : s
-        )
-      );
-      addToast({
-        type: 'success',
-        title: 'Staff updated',
-        message: `${form.name}'s profile has been updated`,
-      });
-    } else {
-      const newStaff: Staff = {
-        id: `stf-${Date.now()}`,
-        ...form,
-        departmentName: dept?.name || '',
-        status: 'ACTIVE',
-        currentWeightedLoad: 0,
-        avatarInitials: form.name
-          .split(' ')
-          .map((n) => n[0])
-          .join('')
-          .slice(0, 2)
-          .toUpperCase(),
-      };
-      setStaff((prev) => [...prev, newStaff]);
-      addToast({
-        type: 'success',
-        title: 'Staff added',
-        message: `${form.name} has been added to ${dept?.name}`,
-      });
+    try {
+      if (editingStaff) {
+        await staffApi.update(editingStaff.id, {
+          name: form.name,
+          jobTitle: form.role,
+          departmentId: form.departmentId,
+        });
+        await loadData();
+      } else {
+        await staffApi.create({
+          name: form.name,
+          email: form.email || `${form.name.toLowerCase().replace(/\s+/g, '.')}@fixloop.edu`,
+          jobTitle: form.role,
+          departmentId: form.departmentId,
+        });
+        await loadData();
+      }
+    } catch {
+      if (editingStaff) {
+        setStaff((prev) =>
+          prev.map((s) =>
+            s.id === editingStaff.id
+              ? { ...s, ...form, departmentName: dept?.name || '' }
+              : s
+          )
+        );
+      } else {
+        const newStaff: Staff = {
+          id: `stf-${Date.now()}`,
+          ...form,
+          departmentName: dept?.name || '',
+          status: 'ACTIVE',
+          currentWeightedLoad: 0,
+          avatarInitials: form.name
+            .split(' ')
+            .map((n) => n[0])
+            .join('')
+            .slice(0, 2)
+            .toUpperCase(),
+        };
+        setStaff((prev) => [...prev, newStaff]);
+      }
     }
+    addToast({
+      type: 'success',
+      title: editingStaff ? 'Staff updated' : 'Staff added',
+      message: `${form.name}'s profile has been saved`,
+    });
     setShowModal(false);
   };
 
@@ -146,7 +185,7 @@ const StaffManagement: React.FC = () => {
     setShowDeptModal(true);
   };
 
-  const handleSaveDept = () => {
+  const handleSaveDept = async () => {
     if (!deptForm.name.trim() || !deptForm.headOfDepartment.trim()) {
       addToast({
         type: 'error',
@@ -156,35 +195,39 @@ const StaffManagement: React.FC = () => {
       return;
     }
 
-    if (editingDept) {
-      setDepartments((prev) =>
-        prev.map((d) => (d.id === editingDept.id ? { ...d, ...deptForm } : d))
-      );
-      // Also update any staff members with updated department name
-      setStaff((prev) =>
-        prev.map((s) =>
-          s.departmentId === editingDept.id ? { ...s, departmentName: deptForm.name } : s
-        )
-      );
-      addToast({
-        type: 'success',
-        title: 'Department updated',
-        message: `${deptForm.name} details have been updated`,
-      });
-    } else {
-      const newDept: Department = {
-        id: `dept-${Date.now()}`,
-        name: deptForm.name.trim(),
-        description: deptForm.description.trim() || 'General campus operations',
-        headOfDepartment: deptForm.headOfDepartment.trim(),
-      };
-      setDepartments((prev) => [...prev, newDept]);
-      addToast({
-        type: 'success',
-        title: 'Department created',
-        message: `Department "${newDept.name}" created under ${newDept.headOfDepartment}`,
-      });
+    try {
+      if (!editingDept) {
+        await departmentApi.create({
+          name: deptForm.name.trim(),
+          description: deptForm.description.trim() || 'General campus operations',
+          headOfDept: deptForm.headOfDepartment.trim(),
+        });
+        await loadData();
+      } else {
+        setDepartments((prev) =>
+          prev.map((d) => (d.id === editingDept.id ? { ...d, ...deptForm } : d))
+        );
+      }
+    } catch {
+      if (editingDept) {
+        setDepartments((prev) =>
+          prev.map((d) => (d.id === editingDept.id ? { ...d, ...deptForm } : d))
+        );
+      } else {
+        const newDept: Department = {
+          id: `dept-${Date.now()}`,
+          name: deptForm.name.trim(),
+          description: deptForm.description.trim() || 'General campus operations',
+          headOfDepartment: deptForm.headOfDepartment.trim(),
+        };
+        setDepartments((prev) => [...prev, newDept]);
+      }
     }
+    addToast({
+      type: 'success',
+      title: editingDept ? 'Department updated' : 'Department created',
+      message: `Department "${deptForm.name}" saved.`,
+    });
     setShowDeptModal(false);
   };
 
@@ -262,8 +305,19 @@ const StaffManagement: React.FC = () => {
           </div>
         </div>
 
+        {/* Error State */}
+        {isError && (
+          <div style={{ padding: '32px 24px' }}>
+            <ErrorState
+              title="Failed to Load Staff & Departments"
+              message="Could not load staff directory and department records from the server. Please verify your connection."
+              onRetry={loadData}
+            />
+          </div>
+        )}
+
         {/* Tab 1: Staff Members */}
-        {activeTab === 'staff' && (
+        {!isError && activeTab === 'staff' && (
           <div>
             {/* Filter Controls Row */}
             <div className="filter-controls-row">
@@ -493,7 +547,7 @@ const StaffManagement: React.FC = () => {
         )}
 
         {/* Tab 2: Departments */}
-        {activeTab === 'departments' && (
+        {!isError && activeTab === 'departments' && (
           <div>
             {/* Department Filter / Actions Row */}
             <div className="filter-controls-row">

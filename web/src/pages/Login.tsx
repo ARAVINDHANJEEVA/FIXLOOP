@@ -39,7 +39,7 @@ const Login: React.FC = () => {
   const { register, handleSubmit, setValue, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
-      email: 'admin@sentinel.edu',
+      email: 'admin@fixloop.edu',
       password: 'admin123',
     },
   });
@@ -56,10 +56,10 @@ const Login: React.FC = () => {
     setSelectedRole(role);
     setServerError('');
     if (role === 'admin') {
-      setValue('email', 'admin@sentinel.edu');
+      setValue('email', 'admin@fixloop.edu');
       setValue('password', 'admin123');
     } else {
-      setValue('email', 'staff@sentinel.edu');
+      setValue('email', 'staff@fixloop.edu');
       setValue('password', 'staff123');
     }
   };
@@ -187,7 +187,7 @@ const Login: React.FC = () => {
                 <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#2563eb' }}>ADMIN DEMO</span>
                 {selectedRole === 'admin' && <CheckCircle2 size={12} color="#2563eb" />}
               </div>
-              <div style={{ fontFamily: 'JetBrains Mono', fontSize: '0.70rem', color: '#64748b' }}>admin@sentinel.edu</div>
+              <div style={{ fontFamily: 'JetBrains Mono', fontSize: '0.70rem', color: '#64748b' }}>admin@fixloop.edu</div>
             </div>
 
             <div
@@ -199,7 +199,7 @@ const Login: React.FC = () => {
                 <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#ea580c' }}>STAFF DEMO</span>
                 {selectedRole === 'staff' && <CheckCircle2 size={12} color="#ea580c" />}
               </div>
-              <div style={{ fontFamily: 'JetBrains Mono', fontSize: '0.70rem', color: '#64748b' }}>staff@sentinel.edu</div>
+              <div style={{ fontFamily: 'JetBrains Mono', fontSize: '0.70rem', color: '#64748b' }}>staff@fixloop.edu</div>
             </div>
           </div>
 
@@ -213,7 +213,7 @@ const Login: React.FC = () => {
                   {...register('email')}
                   type="email"
                   className="clean-input"
-                  placeholder="name@sentinel.edu"
+                  placeholder="name@fixloop.edu"
                   autoComplete="email"
                 />
               </div>

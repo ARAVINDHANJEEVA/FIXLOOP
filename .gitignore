@@ -1,10 +1,94 @@
-# Dependencies
+# ==============================================================================
+# FixLoop - Root Git Ignore Configuration
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. Environment Variables, Secrets & Sensitive Files
+# ------------------------------------------------------------------------------
+.env
+.env.*
+*.env
+**/.env
+**/.env.*
+!.env.example
+!**/.env.example
+docker/.env
+!docker/.env.example
+
+# Private Keys, Certificates & Keystores
+*.pem
+*.key
+*.cert
+*.crt
+*.p12
+*.jks
+*.keystore
+*.pk8
+*.der
+
+# Cloud & Third-Party Service Credentials
+google-services.json
+*firebase*.json
+*service-account*.json
+credentials.json
+client_secret*.json
+
+# ------------------------------------------------------------------------------
+# 2. Local Machine, Device & User Specific Settings
+# ------------------------------------------------------------------------------
+local.properties
+**/local.properties
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# IDEs & Editors
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+!.vscode/extensions.json
+*.suo
+*.ntvs*
+*.njsproj
+.project
+.classpath
+.settings/
+*.sublime-project
+*.sublime-workspace
+
+# ------------------------------------------------------------------------------
+# 3. Documentation, Internal Specs, Blueprints & Plans
+# (Only the root README.md is tracked for public push)
+# ------------------------------------------------------------------------------
+docs/
+*.md
+!/README.md
+
+# ------------------------------------------------------------------------------
+# 4. Private / Prototype Demos
+# ------------------------------------------------------------------------------
+demo app fixloop/
+
+# ------------------------------------------------------------------------------
+# 5. Build Artifacts & Dependencies
+# ------------------------------------------------------------------------------
+# Node.js (Web Frontend)
 node_modules/
 web/node_modules/
-.pnp
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+.pnp/
 .pnp.js
-
-# Production builds
 build/
 web/build/
 dist/
@@ -15,43 +99,47 @@ target/
 *.class
 *.jar
 *.war
+*.nar
+*.ear
+*.zip
+*.tar.gz
+*.rar
 
 # Android / Gradle (Mobile)
 .gradle/
 mobile/.gradle/
 mobile/build/
 mobile/app/build/
-local.properties
 *.apk
+*.ap_
 *.aab
+.cxx/
+mobile/.cxx/
+mobile/app/.cxx/
+captures/
+mobile/captures/
+.externalNativeBuild/
+mobile/.externalNativeBuild/
+mobile/app/.externalNativeBuild/
 
-# Environment & Credentials
-.env
-.env.*
-*.env
-**/.env
-**/.env.*
-!.env.example
-!**/.env.example
-*.pem
-*.key
-*.cert
-*.p12
-*.jks
-docker/.env
+# Python & Runtime Artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+.pytest_cache/
+
+# Uploads & Temp Runtime Storage
+uploads/
+**/uploads/
+temp/
+tmp/
+*.tmp
 
 # Logs
 *.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# OS & IDEs
-.DS_Store
-Thumbs.db
-.idea/
-*.iml
-.vscode/
-*.suo
-*.ntvs*
-*.njsproj
+logs/

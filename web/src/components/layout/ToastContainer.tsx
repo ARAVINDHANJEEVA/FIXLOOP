@@ -11,8 +11,8 @@ const icons: Record<string, React.ReactNode> = {
 };
 
 const ToastItem: React.FC<{ toast: Toast; onRemove: (id: string) => void }> = ({ toast, onRemove }) => {
-  // Extract token if present (e.g. SNT-2026-000224)
-  const tokenMatch = toast.message?.match(/SNT-\d{4}-\d{6}/);
+  // Extract token if present (e.g. FXL-2026-000224)
+  const tokenMatch = toast.message?.match(/(?:FXL|SNT)-\d{4}-\d{6}/);
   const token = tokenMatch ? tokenMatch[0] : null;
 
   const renderMessage = (message?: string) => {

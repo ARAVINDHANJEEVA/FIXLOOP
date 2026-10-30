@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Bell, AlertOctagon, Zap, CheckCircle, Info, AlertTriangle, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Notification } from '../../types';
-import { mockNotifications } from '../../data/mockData';
 import { formatTimeAgo } from '../../utils/helpers';
 
 const typeIcons: Record<string, React.ReactNode> = {
@@ -23,7 +22,7 @@ const typeColors: Record<string, string> = {
 
 const NotificationBell: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const [notifications, setNotifications] = useState<Notification[]>(mockNotifications);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const ref = useRef<HTMLDivElement>(null);
 
   const unreadCount = notifications.filter((n) => !n.read).length;

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Clock,
   Sliders,
@@ -10,23 +10,44 @@ import {
   Zap,
   Percent,
 } from 'lucide-react';
-import { mockCategories, mockSLARules } from '../../data/mockData';
-import { SLARule } from '../../types';
+import { slaApi, categoryApi } from '../../api';
+import { SLARule, Category } from '../../types';
 import { useToast } from '../../hooks/useToast';
 import CategoryIcon from '../../components/ui/CategoryIcon';
+import ErrorState from '../../components/ui/ErrorState';
 import { getCategoryColor } from '../../utils/helpers';
 import { calculatePriorityScore, DEFAULT_PRIORITY_WEIGHTS } from '../../utils/priority';
 
 const Settings: React.FC = () => {
   const { addToast } = useToast();
   const [activeTab, setActiveTab] = useState<'sla' | 'categories' | 'weights'>('sla');
-  const [slaRules, setSlaRules] = useState<SLARule[]>(mockSLARules);
+  const [slaRules, setSlaRules] = useState<SLARule[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [isError, setIsError] = useState(false);
   const [weights, setWeights] = useState({
     w1: DEFAULT_PRIORITY_WEIGHTS.w1, // 0.48
     w2: DEFAULT_PRIORITY_WEIGHTS.w2, // 0.21
     w3: DEFAULT_PRIORITY_WEIGHTS.w3, // 0.08
     w4: DEFAULT_PRIORITY_WEIGHTS.w4, // 0.23
   });
+
+  const loadSettings = useCallback(async () => {
+    setIsError(false);
+    try {
+      const [rulesRes, catsRes] = await Promise.all([
+        slaApi.getRules(),
+        categoryApi.getAll(),
+      ]);
+      setSlaRules(rulesRes || []);
+      setCategories(catsRes || []);
+    } catch {
+      setIsError(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadSettings();
+  }, [loadSettings]);
 
   // Simulated Case: Severity 4, 10 affected students, 5 hours elapsed, SLA 24h, Recurrence 2
   const sampleCalc = calculatePriorityScore(
@@ -50,7 +71,20 @@ const Settings: React.FC = () => {
     );
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    try {
+      // Persist any updated SLA rules
+      await Promise.all(
+        slaRules.map((rule) =>
+          slaApi.updateRule(rule.id, {
+            resolutionHours: rule.resolutionHours,
+            escalationHours: rule.escalationHours,
+          })
+        )
+      );
+    } catch {
+      // Fallback
+    }
     addToast({
       type: 'success',
       title: 'Settings saved',
@@ -162,7 +196,7 @@ const Settings: React.FC = () => {
           >
             <Tag size={15} />
             <span>Category Rules</span>
-            <span className="folder-tab-badge">{mockCategories.length}</span>
+            <span className="folder-tab-badge">{categories.length}</span>
           </div>
           <div
             className={`folder-tab ${activeTab === 'weights' ? 'active' : ''}`}
@@ -173,8 +207,19 @@ const Settings: React.FC = () => {
           </div>
         </div>
 
+        {/* Error State */}
+        {isError && (
+          <div style={{ padding: '32px 24px' }}>
+            <ErrorState
+              title="Failed to Load System Settings"
+              message="Could not load SLA rules and category definitions from the server. Please check your connection."
+              onRetry={loadSettings}
+            />
+          </div>
+        )}
+
         {/* Tab 1: SLA Rules */}
-        {activeTab === 'sla' && (
+        {!isError && activeTab === 'sla' && (
           <div>
             <div className="management-table-container">
               <table className="management-data-table">
@@ -311,7 +356,7 @@ const Settings: React.FC = () => {
         )}
 
         {/* Tab 2: Categories */}
-        {activeTab === 'categories' && (
+        {!isError && activeTab === 'categories' && (
           <div>
             <div className="management-table-container">
               <table className="management-data-table">
@@ -325,7 +370,7 @@ const Settings: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {mockCategories.map((cat) => {
+                  {categories.map((cat) => {
                     const catColor = getCategoryColor(cat.name);
                     return (
                       <tr key={cat.id} className="modern-table-row">

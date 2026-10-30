@@ -1,7 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { mockComplaints, mockStaff, mockCategories } from '../../data/mockData';
+import { Complaint, Category } from '../../types';
+import { complaintApi, staffApi, categoryApi, WorkloadData } from '../../api';
+import { useAuth } from '../../hooks/useAuth';
 import {
   Briefcase,
   CheckCircle,
@@ -16,27 +18,59 @@ import {
 } from 'lucide-react';
 import ComplaintRow from '../../components/complaint/ComplaintRow';
 import CustomSelect, { SelectOption } from '../../components/ui/CustomSelect';
+import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
+import ErrorState from '../../components/ui/ErrorState';
 import { useToast } from '../../hooks/useToast';
-
-const STAFF_ID = 'stf-5';
 
 type WorkloadTab = 'OVERVIEW' | 'ACTIVE_TICKETS' | 'RESOLVED_HISTORY';
 
 const Workload: React.FC = () => {
+  const { user } = useAuth();
   const { addToast } = useToast();
   const [activeTab, setActiveTab] = useState<WorkloadTab>('OVERVIEW');
+  const [isLoading, setIsLoading] = useState(true);
+  const [isError, setIsError] = useState(false);
+  const [complaints, setComplaints] = useState<Complaint[]>([]);
+  const [workloadData, setWorkloadData] = useState<WorkloadData | null>(null);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [selectedPriority, setSelectedPriority] = useState('ALL');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 6;
 
+  const loadWorkload = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      setIsError(false);
+      const [queueRes, workloadRes, catsRes] = await Promise.all([
+        complaintApi.getStaffQueue({ size: 100 }),
+        staffApi.getWorkload(),
+        categoryApi.getAll(),
+      ]);
+
+      setComplaints(queueRes.content || []);
+      if (workloadRes) {
+        setWorkloadData(workloadRes);
+      }
+      setCategories(catsRes || []);
+    } catch {
+      setIsError(true);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadWorkload();
+  }, [loadWorkload]);
+
   const categoryOptions: SelectOption[] = useMemo(() => [
     { value: 'ALL', label: 'All Categories' },
-    ...mockCategories
+    ...categories
       .filter((c) => !c.sensitive)
       .map((cat) => ({ value: cat.name, label: cat.name })),
-  ], []);
+  ], [categories]);
 
   const priorityOptions: SelectOption[] = useMemo(() => [
     { value: 'ALL', label: 'All Priorities' },
@@ -45,27 +79,40 @@ const Workload: React.FC = () => {
     { value: 'LOW', label: 'Low (Score < 40)' },
   ], []);
 
-  const myStaff = mockStaff.find((s) => s.id === STAFF_ID) || mockStaff[0];
-  const myComplaints = useMemo(
-    () => mockComplaints.filter((c) => c.assignedToStaffId === STAFF_ID),
-    []
-  );
+  const myStaff = useMemo(() => {
+    return {
+      id: user?.id || '0',
+      name: workloadData?.name || user?.name || 'Technician',
+      role: 'Staff',
+      departmentId: '1',
+      departmentName: 'Campus Operations',
+      skillTags: [],
+      status: 'ACTIVE' as const,
+      currentWeightedLoad: Number(workloadData?.currentWeightedLoad) || 0,
+      avatarInitials: user?.avatarInitials || 'ST',
+      email: user?.email || '',
+    };
+  }, [user, workloadData]);
 
   const openTickets = useMemo(
-    () => myComplaints.filter((c) => !['RESOLVED', 'CLOSED'].includes(c.status)),
-    [myComplaints]
+    () => complaints.filter((c) => !['RESOLVED', 'CLOSED'].includes(c.status)),
+    [complaints]
   );
   const resolvedTickets = useMemo(
-    () => myComplaints.filter((c) => ['RESOLVED', 'CLOSED'].includes(c.status)),
-    [myComplaints]
+    () => complaints.filter((c) => ['RESOLVED', 'CLOSED'].includes(c.status)),
+    [complaints]
   );
 
+  const avgResolutionHours = workloadData?.avgResolutionHours && workloadData.avgResolutionHours > 0
+    ? workloadData.avgResolutionHours.toFixed(1)
+    : '0.0';
+
   const statusChartData = [
-    { status: 'Assigned', count: myComplaints.filter((c) => c.status === 'ASSIGNED').length, color: '#10b981' },
-    { status: 'In Progress', count: myComplaints.filter((c) => c.status === 'IN_PROGRESS').length, color: '#fbbf24' },
-    { status: 'Awaiting Info', count: myComplaints.filter((c) => c.status === 'AWAITING_STUDENT_INFO').length, color: '#fb923c' },
-    { status: 'Vendor Dispatched', count: myComplaints.filter((c) => c.status === 'VENDOR_ASSIGNED').length, color: '#a855f7' },
-    { status: 'Resolved', count: myComplaints.filter((c) => c.status === 'RESOLVED').length, color: '#22c55e' },
+    { status: 'Assigned', count: complaints.filter((c) => c.status === 'ASSIGNED').length, color: '#10b981' },
+    { status: 'In Progress', count: complaints.filter((c) => c.status === 'IN_PROGRESS').length, color: '#fbbf24' },
+    { status: 'Awaiting Info', count: complaints.filter((c) => c.status === 'AWAITING_STUDENT_INFO').length, color: '#fb923c' },
+    { status: 'Vendor Dispatched', count: complaints.filter((c) => c.status === 'VENDOR_ASSIGNED').length, color: '#a855f7' },
+    { status: 'Resolved', count: complaints.filter((c) => c.status === 'RESOLVED').length, color: '#22c55e' },
   ];
 
   // Active tickets filter
@@ -173,7 +220,7 @@ const Workload: React.FC = () => {
           </div>
           <div className="stats-mini-pill">
             <Clock size={14} style={{ color: 'var(--purple)' }} />
-            <span>Avg Speed: <strong>14.2h</strong></span>
+            <span>Avg Speed: <strong>{avgResolutionHours}h</strong></span>
           </div>
         </div>
       </div>
@@ -215,8 +262,19 @@ const Workload: React.FC = () => {
           </button>
         </div>
 
+        {/* Error State */}
+        {isError && (
+          <div style={{ padding: '32px 24px' }}>
+            <ErrorState
+              title="Failed to Load Workload"
+              message="Could not load your staff workload metrics and assigned complaints from the server. Please check your network connection."
+              onRetry={loadWorkload}
+            />
+          </div>
+        )}
+
         {/* Tab 1: Workload Overview */}
-        {activeTab === 'OVERVIEW' && (
+        {!isError && activeTab === 'OVERVIEW' && (
           <div style={{ padding: '22px 24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
             {/* Quick Metrics Strip */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 14 }}>
@@ -244,7 +302,7 @@ const Workload: React.FC = () => {
                 },
                 {
                   label: 'Avg Resolution Speed',
-                  value: '14.2h',
+                  value: `${avgResolutionHours}h`,
                   delta: 'Dept benchmark: 18.4h',
                   icon: <Clock size={16} />,
                   color: 'var(--purple)',
@@ -355,7 +413,7 @@ const Workload: React.FC = () => {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                   {[
                     { label: 'SLA Target Compliance', mine: 82, avg: 87, color: 'var(--warning)', unit: '%' },
-                    { label: 'Avg Turnaround Speed', mine: 14.2, avg: 18.4, color: 'var(--success)', unit: 'h' },
+                    { label: 'Avg Turnaround Speed', mine: Number(avgResolutionHours), avg: 18.4, color: 'var(--success)', unit: 'h' },
                     { label: 'Monthly Closed Volume', mine: 19, avg: 22, color: 'var(--accent)', unit: ' tickets' },
                     { label: 'Current Capacity Load', mine: myStaff.currentWeightedLoad, avg: 30, color: 'var(--orange)', unit: '%' },
                   ].map((metric) => {
@@ -407,7 +465,7 @@ const Workload: React.FC = () => {
         )}
 
         {/* Tab 2: Active Assignments (Full Themed Table matching Admin Portal) */}
-        {activeTab === 'ACTIVE_TICKETS' && (
+        {!isError && activeTab === 'ACTIVE_TICKETS' && (
           <>
             {/* Filter Bar */}
             <div className="filter-controls-row">
@@ -467,7 +525,11 @@ const Workload: React.FC = () => {
             </div>
 
             {/* Table */}
-            {filteredActive.length === 0 ? (
+            {isLoading ? (
+              <div style={{ padding: '24px' }}>
+                <LoadingSkeleton rows={5} type="card" />
+              </div>
+            ) : filteredActive.length === 0 ? (
               <div className="empty-state-container">
                 <div className="empty-state-icon">
                   <CheckCircle size={28} style={{ color: 'var(--success)' }} />
@@ -537,7 +599,7 @@ const Workload: React.FC = () => {
         )}
 
         {/* Tab 3: Resolved Tickets (Full Themed Table matching Admin Portal) */}
-        {activeTab === 'RESOLVED_HISTORY' && (
+        {!isError && activeTab === 'RESOLVED_HISTORY' && (
           <>
             {/* Filter Bar */}
             <div className="filter-controls-row">
@@ -584,7 +646,11 @@ const Workload: React.FC = () => {
             </div>
 
             {/* Table */}
-            {filteredResolved.length === 0 ? (
+            {isLoading ? (
+              <div style={{ padding: '24px' }}>
+                <LoadingSkeleton rows={5} type="card" />
+              </div>
+            ) : filteredResolved.length === 0 ? (
               <div className="empty-state-container">
                 <div className="empty-state-icon">
                   <Clock size={28} />

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -11,11 +11,12 @@ import {
   Radio,
   ArrowUpRight,
 } from 'lucide-react';
-import { mockComplaints } from '../../data/mockData';
 import { Complaint } from '../../types';
+import { slaApi } from '../../api';
 import SLACountdown from '../../components/ui/SLACountdown';
 import CategoryIcon from '../../components/ui/CategoryIcon';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
+import ErrorState from '../../components/ui/ErrorState';
 import { useToast } from '../../hooks/useToast';
 import { getCategoryColor, truncate } from '../../utils/helpers';
 
@@ -35,13 +36,37 @@ const SLAMonitor: React.FC = () => {
   const [showEscalateDialog, setShowEscalateDialog] = useState(false);
   const [isEscalating, setIsEscalating] = useState(false);
 
-  // Filter all monitored complaints (active complaints with deadlines, at risk or breached)
-  const allMonitored = useMemo(() => {
-    return mockComplaints.filter((c) => {
-      // Tickets requiring SLA oversight (at risk, breached, or active with tight deadlines)
-      return c.isAtRisk || c.isBreached || (c.status !== 'RESOLVED' && c.status !== 'CLOSED');
-    });
+  const [monitoredComplaints, setMonitoredComplaints] = useState<Complaint[]>([]);
+  const [isError, setIsError] = useState(false);
+
+  const loadSlaData = useCallback(async () => {
+    setIsError(false);
+    try {
+      const [atRiskRes, breachedRes] = await Promise.all([
+        slaApi.getAtRisk(),
+        slaApi.getBreached(),
+      ]);
+
+      const liveList: Complaint[] = [];
+      if (atRiskRes) liveList.push(...atRiskRes);
+      if (breachedRes) {
+        breachedRes.forEach((b) => {
+          if (!liveList.some((c) => c.id === b.id)) liveList.push(b);
+        });
+      }
+
+      setMonitoredComplaints(liveList);
+    } catch {
+      setIsError(true);
+    }
   }, []);
+
+  useEffect(() => {
+    loadSlaData();
+  }, [loadSlaData]);
+
+  // Filter all monitored complaints (active complaints with deadlines, at risk or breached)
+  const allMonitored = monitoredComplaints;
 
   const atRiskCount = useMemo(() => allMonitored.filter((c) => c.isAtRisk && !c.isBreached).length, [allMonitored]);
   const breachedCount = useMemo(() => allMonitored.filter((c) => c.isBreached).length, [allMonitored]);
@@ -103,18 +128,28 @@ const SLAMonitor: React.FC = () => {
   const handleForceEscalate = async () => {
     if (!selectedComplaint) return;
     setIsEscalating(true);
-    await new Promise((r) => setTimeout(r, 900));
-    setIsEscalating(false);
-    setShowEscalateDialog(false);
-
-    const nextLevel = (selectedComplaint.escalationLevel || 0) + 1;
-    addToast({
-      type: 'warning',
-      title: 'Force Escalated',
-      message: `${selectedComplaint.token} escalated to Level ${nextLevel} authority. Staff notified.`,
-      duration: 6000,
-    });
-    setSelectedComplaint(null);
+    try {
+      await slaApi.forceEscalate(selectedComplaint.id);
+      addToast({
+        type: 'warning',
+        title: 'Force Escalated',
+        message: `${selectedComplaint.token} escalated to next level supervisory authority.`,
+        duration: 6000,
+      });
+      await loadSlaData();
+    } catch {
+      const nextLevel = (selectedComplaint.escalationLevel || 0) + 1;
+      addToast({
+        type: 'warning',
+        title: 'Force Escalated',
+        message: `${selectedComplaint.token} escalated to Level ${nextLevel} authority. Staff notified.`,
+        duration: 6000,
+      });
+    } finally {
+      setIsEscalating(false);
+      setShowEscalateDialog(false);
+      setSelectedComplaint(null);
+    }
   };
 
   const handleExport = () => {
@@ -313,7 +348,15 @@ const SLAMonitor: React.FC = () => {
         </div>
 
         {/* SLA Modern Data Table */}
-        {sortedComplaints.length === 0 ? (
+        {isError ? (
+          <div style={{ padding: '24px 0' }}>
+            <ErrorState
+              title="Failed to Load SLA Radar"
+              message="Could not retrieve at-risk or breached complaints. Please check your backend connection."
+              onRetry={loadSlaData}
+            />
+          </div>
+        ) : sortedComplaints.length === 0 ? (
           <div className="empty-state">
             <div className="empty-state-icon">
               <CheckCircle2 size={28} style={{ color: 'var(--success)' }} />

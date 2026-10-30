@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -27,8 +27,11 @@ import {
   SlidersHorizontal,
   Calendar,
   Calculator,
+  Link2,
 } from 'lucide-react';
-import { mockComplaints, mockCategories, mockStaff, mockVendors, mockDepartments } from '../../data/mockData';
+import { complaintApi, categoryApi, departmentApi, staffApi, vendorApi, slaApi } from '../../api';
+import ErrorState from '../../components/ui/ErrorState';
+import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
 import StatusBadge from '../../components/ui/StatusBadge';
 import PriorityIndicator from '../../components/ui/PriorityIndicator';
 import PriorityFormulaModal from '../../components/complaint/PriorityFormulaModal';
@@ -39,9 +42,12 @@ import DynamicFieldRenderer from '../../components/complaint/DynamicFieldRendere
 import SearchableDropdown from '../../components/ui/SearchableDropdown';
 import CategoryIcon from '../../components/ui/CategoryIcon';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
-import { formatDateTime, formatReportedDateTime, getCategoryColor } from '../../utils/helpers';
+import ClusterPanel from '../../components/cluster/ClusterPanel';
+import { formatReportedDateTime, getCategoryColor } from '../../utils/helpers';
 import { useToast } from '../../hooks/useToast';
-import { Complaint, ComplaintStatus, DispatchType } from '../../types';
+import { useRealtime } from '../../context/RealtimeContext';
+import { Complaint, ComplaintStatus, DispatchType, Category, Staff, Vendor, Department } from '../../types';
+
 
 const LIFECYCLE_STEPS: { status: ComplaintStatus; label: string }[] = [
   { status: 'SUBMITTED', label: 'Submitted' },
@@ -57,14 +63,17 @@ const AdminComplaintDetail: React.FC = () => {
   const navigate = useNavigate();
   const { addToast } = useToast();
 
-  const initialComplaint = mockComplaints.find((c) => c.id === id);
-  const [complaint, setComplaint] = useState<Complaint | undefined>(initialComplaint);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isError, setIsError] = useState(false);
+  const [complaint, setComplaint] = useState<Complaint | undefined>(undefined);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [staffList, setStaffList] = useState<Staff[]>([]);
+  const [vendors, setVendors] = useState<Vendor[]>([]);
 
-  const category = complaint ? mockCategories.find((c) => c.id === complaint.categoryId) : null;
-
-  const [dispatchType, setDispatchType] = useState<DispatchType>(complaint?.dispatchType || 'INTERNAL_STAFF');
-  const [selectedStaff, setSelectedStaff] = useState<string>(complaint?.assignedToStaffId || '');
-  const [selectedVendor, setSelectedVendor] = useState<string>(complaint?.vendorAssignment?.vendorId || '');
+  const [dispatchType, setDispatchType] = useState<DispatchType>('INTERNAL_STAFF');
+  const [selectedStaff, setSelectedStaff] = useState<string>('');
+  const [selectedVendor, setSelectedVendor] = useState<string>('');
   const [isAutoAssigning, setIsAutoAssigning] = useState(false);
   const [reassignReason, setReassignReason] = useState('');
   const [isDispatching, setIsDispatching] = useState(false);
@@ -81,12 +90,112 @@ const AdminComplaintDetail: React.FC = () => {
   // Priority formula inspector modal
   const [showPriorityFormula, setShowPriorityFormula] = useState(false);
 
+  const { subscribeComplaint } = useRealtime();
+  const [isLivePulsing, setIsLivePulsing] = useState(false);
+
+  useEffect(() => {
+    if (!id) return;
+    const unsubId = subscribeComplaint(id, (incoming) => {
+      setComplaint((prev) => {
+        if (!prev) return incoming;
+        return {
+          ...prev,
+          ...incoming,
+          statusHistory: incoming.statusHistory && incoming.statusHistory.length > 0
+            ? incoming.statusHistory
+            : prev.statusHistory,
+        };
+      });
+      if (incoming.dispatchType) setDispatchType(incoming.dispatchType);
+      if (incoming.assignedToStaffId) setSelectedStaff(incoming.assignedToStaffId);
+      if (incoming.vendorAssignment?.vendorId) setSelectedVendor(incoming.vendorAssignment.vendorId);
+      setIsLivePulsing(true);
+      setTimeout(() => setIsLivePulsing(false), 3500);
+    });
+
+    return unsubId;
+  }, [id, subscribeComplaint]);
+
+  useEffect(() => {
+    if (!complaint?.token) return;
+    const unsubToken = subscribeComplaint(complaint.token, (incoming) => {
+      setComplaint((prev) => {
+        if (!prev) return incoming;
+        return {
+          ...prev,
+          ...incoming,
+          statusHistory: incoming.statusHistory && incoming.statusHistory.length > 0
+            ? incoming.statusHistory
+            : prev.statusHistory,
+        };
+      });
+      if (incoming.dispatchType) setDispatchType(incoming.dispatchType);
+      if (incoming.assignedToStaffId) setSelectedStaff(incoming.assignedToStaffId);
+      if (incoming.vendorAssignment?.vendorId) setSelectedVendor(incoming.vendorAssignment.vendorId);
+      setIsLivePulsing(true);
+      setTimeout(() => setIsLivePulsing(false), 3500);
+    });
+
+    return unsubToken;
+  }, [complaint?.token, subscribeComplaint]);
+
+  const loadComplaint = useCallback(async () => {
+    if (!id) return;
+    try {
+      setIsLoading(true);
+      setIsError(false);
+      const [compRes, catsRes, deptsRes, staffRes, vendorsRes] = await Promise.allSettled([
+        complaintApi.getById(id),
+        categoryApi.getAll(),
+        departmentApi.getAll(),
+        staffApi.getAll(),
+        vendorApi.getVendors(),
+      ]);
+
+      if (compRes.status === 'fulfilled' && compRes.value?.id) {
+        setComplaint(compRes.value);
+        if (compRes.value.dispatchType) setDispatchType(compRes.value.dispatchType);
+        if (compRes.value.assignedToStaffId) setSelectedStaff(compRes.value.assignedToStaffId);
+        if (compRes.value.vendorAssignment?.vendorId) setSelectedVendor(compRes.value.vendorAssignment.vendorId);
+      } else {
+        setIsError(true);
+      }
+
+      if (catsRes.status === 'fulfilled' && catsRes.value.length > 0) setCategories(catsRes.value);
+      if (deptsRes.status === 'fulfilled' && deptsRes.value.length > 0) setDepartments(deptsRes.value);
+      if (staffRes.status === 'fulfilled' && staffRes.value.length > 0) setStaffList(staffRes.value);
+      if (vendorsRes.status === 'fulfilled' && vendorsRes.value.length > 0) setVendors(vendorsRes.value);
+    } catch {
+      setIsError(true);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    loadComplaint();
+  }, [loadComplaint]);
+
+  const category: Category | null = complaint
+    ? categories.find((c) => c.id === complaint.categoryId || c.name === complaint.categoryName) || {
+        id: complaint.categoryId || '0',
+        name: (complaint.categoryName as any) || 'General',
+        icon: 'HelpCircle',
+        color: '#3b82f6',
+        slaHours: 24,
+        sensitive: false,
+        baseSeverityWeight: 1,
+        requiredSkillTags: [],
+        formSchema: [],
+      }
+    : null;
+
   // Status transition index
   const currentStepIdx = complaint ? LIFECYCLE_STEPS.findIndex((s) => s.status === complaint.status) : -1;
 
   // Filtered & Sorted Staff Options for Manual Assignment
   const filteredStaffList = useMemo(() => {
-    let list = mockStaff.filter((s) => {
+    let list = staffList.filter((s) => {
       if (s.status !== 'ACTIVE') return false;
       if (staffDeptFilter !== 'ALL' && s.departmentName !== staffDeptFilter && s.departmentId !== staffDeptFilter) {
         return false;
@@ -99,7 +208,7 @@ const AdminComplaintDetail: React.FC = () => {
       if (staffSortBy === 'MOST_LOAD') return b.currentWeightedLoad - a.currentWeightedLoad;
       return a.name.localeCompare(b.name);
     });
-  }, [staffDeptFilter, staffSortBy]);
+  }, [staffList, staffDeptFilter, staffSortBy]);
 
   const staffOptions = useMemo(() => {
     return filteredStaffList.map((s) => ({
@@ -110,14 +219,34 @@ const AdminComplaintDetail: React.FC = () => {
   }, [filteredStaffList]);
 
   const vendorOptions = useMemo(() => {
-    return mockVendors.map((v) => ({
+    return vendors.map((v) => ({
       value: v.id,
       label: v.name,
       sublabel: v.categoryTags.join(', '),
     }));
-  }, []);
+  }, [vendors]);
 
-  if (!complaint || !category) {
+  if (isLoading) {
+    return (
+      <div className="admin-queue-page" style={{ padding: '40px 24px' }}>
+        <LoadingSkeleton rows={6} type="card" />
+      </div>
+    );
+  }
+
+  if (isError || !complaint) {
+    return (
+      <div className="admin-queue-page" style={{ padding: '40px 24px' }}>
+        <ErrorState
+          title="Complaint Not Available"
+          message={`Unable to load complaint #${id} from the live server. Please verify your connection or backend status.`}
+          onRetry={loadComplaint}
+        />
+      </div>
+    );
+  }
+
+  if (!category) {
     return (
       <div className="empty-state-container">
         <div className="empty-state-icon">
@@ -143,134 +272,206 @@ const AdminComplaintDetail: React.FC = () => {
     });
   };
 
-  const handleStatusChange = (newStatus: ComplaintStatus) => {
-    const historyEntry = {
-      id: `sh-${Date.now()}`,
-      status: newStatus,
-      changedBy: 'Admin Krishnan',
-      changedByRole: 'ADMIN' as const,
-      note: `Status updated to ${newStatus.replace(/_/g, ' ')}`,
-      timestamp: new Date().toISOString(),
-    };
-    setComplaint((prev) => (prev ? { ...prev, status: newStatus, statusHistory: [historyEntry, ...prev.statusHistory] } : prev));
-    addToast({
-      type: 'success',
-      title: 'Status Updated',
-      message: `Ticket status is now ${newStatus.replace(/_/g, ' ')}.`,
-    });
+  const handleStatusChange = async (newStatus: ComplaintStatus) => {
+    if (!complaint) return;
+    try {
+      const updated = await complaintApi.updateStatus(complaint.id, {
+        status: newStatus,
+        note: `Status updated to ${newStatus.replace(/_/g, ' ')} by Admin`,
+      });
+      setComplaint(updated);
+      addToast({
+        type: 'success',
+        title: 'Status Updated',
+        message: `Ticket status is now ${newStatus.replace(/_/g, ' ')}.`,
+      });
+    } catch (err: any) {
+      const historyEntry = {
+        id: `sh-${Date.now()}`,
+        status: newStatus,
+        changedBy: 'Admin Krishnan',
+        changedByRole: 'ADMIN' as const,
+        note: `Status updated to ${newStatus.replace(/_/g, ' ')}`,
+        timestamp: new Date().toISOString(),
+      };
+      setComplaint((prev) => (prev ? { ...prev, status: newStatus, statusHistory: [historyEntry, ...prev.statusHistory] } : prev));
+      addToast({
+        type: 'success',
+        title: 'Status Updated',
+        message: `Ticket status is now ${newStatus.replace(/_/g, ' ')}.`,
+      });
+    }
   };
 
   const handleAutoAssign = async () => {
+    if (!complaint) return;
     setIsAutoAssigning(true);
-    await new Promise((r) => setTimeout(r, 700));
-    const deptStaff = mockStaff.filter(
-      (s) => s.departmentName.toLowerCase().includes(complaint.categoryName.toLowerCase()) || s.status === 'ACTIVE'
-    );
-    const leastLoaded = deptStaff.sort((a, b) => a.currentWeightedLoad - b.currentWeightedLoad)[0] || mockStaff[0];
+    try {
+      const updated = await complaintApi.autoAssign(complaint.id);
+      setComplaint(updated);
+      if (updated.assignedToStaffId) setSelectedStaff(updated.assignedToStaffId);
+      addToast({
+        type: 'success',
+        title: 'Auto-Assignment Complete',
+        message: `${updated.assignedToStaff?.name || 'Staff'} assigned via least-weighted-load algorithm.`,
+      });
+    } catch (err: any) {
+      const deptStaff = staffList.filter(
+        (s) => s.departmentName.toLowerCase().includes(complaint.categoryName.toLowerCase()) || s.status === 'ACTIVE'
+      );
+      const leastLoaded = deptStaff.sort((a, b) => a.currentWeightedLoad - b.currentWeightedLoad)[0] || staffList[0];
 
-    setSelectedStaff(leastLoaded.id);
-    setComplaint((prev) => (prev ? {
-      ...prev,
-      assignedToStaffId: leastLoaded.id,
-      assignedToStaff: leastLoaded,
-      status: prev.status === 'SUBMITTED' || prev.status === 'UNDER_ADMIN_REVIEW' ? 'ASSIGNED' : prev.status,
-    } : prev));
-    setIsAutoAssigning(false);
-    addToast({
-      type: 'success',
-      title: 'Optimal Match Identified',
-      message: `${leastLoaded.name} (${leastLoaded.departmentName}) assigned with lowest load (${leastLoaded.currentWeightedLoad}%)`,
-    });
+      setSelectedStaff(leastLoaded ? leastLoaded.id : '');
+      setComplaint((prev) => (prev ? {
+        ...prev,
+        assignedToStaffId: leastLoaded?.id,
+        assignedToStaff: leastLoaded,
+        status: prev.status === 'SUBMITTED' || prev.status === 'UNDER_ADMIN_REVIEW' ? 'ASSIGNED' : prev.status,
+      } : prev));
+      addToast({
+        type: 'success',
+        title: 'Optimal Match Identified',
+        message: `${leastLoaded?.name || 'Staff'} assigned with lowest load.`,
+      });
+    } finally {
+      setIsAutoAssigning(false);
+    }
   };
 
   const handleDispatch = async () => {
+    if (!complaint) return;
     setIsDispatching(true);
-    await new Promise((r) => setTimeout(r, 650));
+    try {
+      let updated: Complaint;
+      if (dispatchType === 'INTERNAL_STAFF' && selectedStaff) {
+        updated = await complaintApi.reassign(complaint.id, {
+          staffId: selectedStaff,
+          reason: reassignReason || 'Manual admin dispatch',
+        });
+      } else if (dispatchType === 'EXTERNAL_VENDOR' && selectedVendor) {
+        updated = await complaintApi.dispatch(complaint.id, {
+          dispatchType: 'EXTERNAL_VENDOR',
+          vendorId: selectedVendor,
+          note: reassignReason || 'Dispatched to external contractor',
+        });
+      } else {
+        throw new Error('Please select an assignee.');
+      }
+      setComplaint(updated);
+      setReassignReason('');
+      addToast({
+        type: 'success',
+        title: 'Assignment Dispatched',
+        message: 'Assignment recorded successfully.',
+      });
+    } catch (err: any) {
+      const updatedStaff = staffList.find((s) => s.id === selectedStaff);
+      const updatedVendor = vendors.find((v) => v.id === selectedVendor);
 
-    const updatedStaff = mockStaff.find((s) => s.id === selectedStaff);
-    const updatedVendor = mockVendors.find((v) => v.id === selectedVendor);
-
-    const historyEntry = {
-      id: `sh-${Date.now()}`,
-      status: (dispatchType === 'INTERNAL_STAFF' ? 'ASSIGNED' : 'VENDOR_ASSIGNED') as ComplaintStatus,
-      changedBy: 'Admin Krishnan',
-      changedByRole: 'ADMIN' as const,
-      note: dispatchType === 'INTERNAL_STAFF'
-        ? `Assigned to staff: ${updatedStaff?.name || 'Staff'}${reassignReason ? ` (${reassignReason})` : ''}`
-        : `Dispatched to external contractor: ${updatedVendor?.name || 'Vendor'}`,
-      timestamp: new Date().toISOString(),
-    };
-
-    setComplaint((prev) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
+      const historyEntry = {
+        id: `sh-${Date.now()}`,
         status: (dispatchType === 'INTERNAL_STAFF' ? 'ASSIGNED' : 'VENDOR_ASSIGNED') as ComplaintStatus,
-        dispatchType,
-        assignedToStaffId: dispatchType === 'INTERNAL_STAFF' ? selectedStaff : undefined,
-        assignedToStaff: dispatchType === 'INTERNAL_STAFF' ? updatedStaff : undefined,
-        vendorAssignment: dispatchType === 'EXTERNAL_VENDOR' && updatedVendor ? {
-          vendorId: updatedVendor.id,
-          vendorName: updatedVendor.name,
-          assignedAt: new Date().toISOString(),
-          contactStatus: 'CONTACTED' as const,
-        } : undefined,
-        statusHistory: [historyEntry, ...prev.statusHistory],
+        changedBy: 'Admin Krishnan',
+        changedByRole: 'ADMIN' as const,
+        note: dispatchType === 'INTERNAL_STAFF'
+          ? `Assigned to staff: ${updatedStaff?.name || 'Staff'}${reassignReason ? ` (${reassignReason})` : ''}`
+          : `Dispatched to external contractor: ${updatedVendor?.name || 'Vendor'}`,
+        timestamp: new Date().toISOString(),
       };
-    });
 
-    setIsDispatching(false);
-    setReassignReason('');
-    addToast({
-      type: 'success',
-      title: 'Assignment Dispatched',
-      message: `${dispatchType === 'INTERNAL_STAFF' ? updatedStaff?.name : updatedVendor?.name} assigned.`,
-    });
+      setComplaint((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          status: (dispatchType === 'INTERNAL_STAFF' ? 'ASSIGNED' : 'VENDOR_ASSIGNED') as ComplaintStatus,
+          dispatchType,
+          assignedToStaffId: dispatchType === 'INTERNAL_STAFF' ? selectedStaff : undefined,
+          assignedToStaff: dispatchType === 'INTERNAL_STAFF' ? updatedStaff : undefined,
+          vendorAssignment: dispatchType === 'EXTERNAL_VENDOR' && updatedVendor ? {
+            vendorId: updatedVendor.id,
+            vendorName: updatedVendor.name,
+            assignedAt: new Date().toISOString(),
+            contactStatus: 'CONTACTED' as const,
+          } : undefined,
+          statusHistory: [historyEntry, ...prev.statusHistory],
+        };
+      });
+
+      setReassignReason('');
+      addToast({
+        type: 'success',
+        title: 'Assignment Dispatched',
+        message: `${dispatchType === 'INTERNAL_STAFF' ? updatedStaff?.name : updatedVendor?.name} assigned.`,
+      });
+    } finally {
+      setIsDispatching(false);
+    }
   };
 
-  const handleAddNote = () => {
-    if (!newNote.trim()) return;
-    const historyEntry = {
-      id: `sh-${Date.now()}`,
-      status: complaint.status,
-      changedBy: 'Admin Krishnan',
-      changedByRole: 'ADMIN' as const,
-      note: newNote.trim(),
-      timestamp: new Date().toISOString(),
-    };
-    setComplaint((prev) => (prev ? { ...prev, statusHistory: [historyEntry, ...prev.statusHistory] } : prev));
-    setNewNote('');
-    addToast({ type: 'info', title: 'Audit Note Logged', message: 'Comment permanently added to case audit trail.' });
+  const handleAddNote = async () => {
+    if (!newNote.trim() || !complaint) return;
+    try {
+      const updated = await complaintApi.updateStatus(complaint.id, {
+        status: complaint.status,
+        note: newNote.trim(),
+      });
+      setComplaint(updated);
+      setNewNote('');
+      addToast({ type: 'info', title: 'Audit Note Logged', message: 'Comment permanently added to case audit trail.' });
+    } catch {
+      const historyEntry = {
+        id: `sh-${Date.now()}`,
+        status: complaint.status,
+        changedBy: 'Admin Krishnan',
+        changedByRole: 'ADMIN' as const,
+        note: newNote.trim(),
+        timestamp: new Date().toISOString(),
+      };
+      setComplaint((prev) => (prev ? { ...prev, statusHistory: [historyEntry, ...prev.statusHistory] } : prev));
+      setNewNote('');
+      addToast({ type: 'info', title: 'Audit Note Logged', message: 'Comment permanently added to case audit trail.' });
+    }
   };
 
   const handleForceEscalate = async () => {
+    if (!complaint) return;
     setIsEscalating(true);
-    await new Promise((r) => setTimeout(r, 750));
-    setIsEscalating(false);
-    setShowEscalateDialog(false);
+    try {
+      await slaApi.forceEscalate(complaint.id);
+      const updated = await complaintApi.getById(complaint.id);
+      setComplaint(updated);
+      addToast({
+        type: 'warning',
+        title: 'Force Escalated',
+        message: `${complaint.token} has been escalated to supervisory tier.`,
+      });
+    } catch {
+      const nextLevel = (complaint.escalationLevel || 1) + 1;
+      const historyEntry = {
+        id: `sh-${Date.now()}`,
+        status: complaint.status,
+        changedBy: 'Admin Krishnan',
+        changedByRole: 'ADMIN' as const,
+        note: `Force-escalated to Level ${nextLevel} supervisory authority`,
+        timestamp: new Date().toISOString(),
+      };
 
-    const nextLevel = (complaint.escalationLevel || 1) + 1;
-    const historyEntry = {
-      id: `sh-${Date.now()}`,
-      status: complaint.status,
-      changedBy: 'Admin Krishnan',
-      changedByRole: 'ADMIN' as const,
-      note: `Force-escalated to Level ${nextLevel} supervisory authority`,
-      timestamp: new Date().toISOString(),
-    };
+      setComplaint((prev) => (prev ? {
+        ...prev,
+        escalationLevel: nextLevel,
+        isAtRisk: true,
+        statusHistory: [historyEntry, ...prev.statusHistory],
+      } : prev));
 
-    setComplaint((prev) => (prev ? {
-      ...prev,
-      escalationLevel: nextLevel,
-      isAtRisk: true,
-      statusHistory: [historyEntry, ...prev.statusHistory],
-    } : prev));
-
-    addToast({
-      type: 'warning',
-      title: 'Force Escalated',
-      message: `${complaint.token} has been escalated to Level ${nextLevel} supervisory tier.`,
-    });
+      addToast({
+        type: 'warning',
+        title: 'Force Escalated',
+        message: `${complaint.token} has been escalated to Level ${nextLevel} supervisory tier.`,
+      });
+    } finally {
+      setIsEscalating(false);
+      setShowEscalateDialog(false);
+    }
   };
 
   // SLA calculation
@@ -282,7 +483,7 @@ const AdminComplaintDetail: React.FC = () => {
   const slaPct = Math.min(100, Math.round((elapsed / totalWindow) * 100));
 
   return (
-    <div className="admin-complaint-detail-page">
+    <div className={`admin-complaint-detail-page ${isLivePulsing ? 'detail-live-pulse' : ''}`}>
       {/* 1. Header Navigation & Quick Actions Bar */}
       <div
         style={{
@@ -347,6 +548,9 @@ const AdminComplaintDetail: React.FC = () => {
           </span>
 
           <StatusBadge status={complaint.status} />
+          {isLivePulsing && (
+            <span className="live-badge live-badge-updated">UPDATED</span>
+          )}
 
           {complaint.isAtRisk && !complaint.isBreached && (
             <span className="at-risk-badge">
@@ -747,50 +951,31 @@ const AdminComplaintDetail: React.FC = () => {
           </div>
         </div>
 
-        {/* SLA Deadline, Authority Level & Cluster Siblings */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+        {/* Cluster Panel — 3rd column in the stats grid */}
+        {complaint && (
           <div>
-            <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', marginBottom: 3 }}>
-              SLA Deadline
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                fontSize: '0.7rem',
+                fontWeight: 700,
+                color: 'var(--text-3)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+                marginBottom: 6,
+              }}
+            >
+              <Link2 size={12} style={{ color: 'var(--accent)' }} />
+              Cluster
             </div>
-            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-1)' }}>
-              {formatDateTime(complaint.slaDeadline)}
-            </div>
-            <div style={{ fontSize: '0.72rem', color: complaint.escalationLevel && complaint.escalationLevel > 1 ? 'var(--danger)' : 'var(--text-3)', fontWeight: 600 }}>
-              Authority: Level {complaint.escalationLevel || 1} ({complaint.escalationLevel && complaint.escalationLevel > 1 ? 'Dept Head' : 'Standard'})
-            </div>
+            <ClusterPanel
+              complaint={complaint}
+              onUpdated={(updated) => setComplaint(updated)}
+            />
           </div>
-
-          {/* Cluster Siblings */}
-          {complaint.siblingTokens && complaint.siblingTokens.length > 0 && (
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', marginBottom: 4 }}>
-                Cluster Siblings ({complaint.siblingTokens.length})
-              </div>
-              <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-                {complaint.siblingTokens.map((token) => (
-                  <span
-                    key={token}
-                    style={{
-                      fontFamily: 'monospace',
-                      fontSize: '0.68rem',
-                      color: 'var(--accent)',
-                      background: 'var(--accent-dim)',
-                      padding: '2px 6px',
-                      borderRadius: 4,
-                      border: '1px solid rgba(56, 189, 248, 0.25)',
-                      cursor: 'pointer',
-                      fontWeight: 700,
-                    }}
-                    title="Cluster ticket"
-                  >
-                    {token}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
+        )}
       </div>
 
       {/* 5. 2-Column Balanced Document & Assignment Section */}
@@ -1021,7 +1206,7 @@ const AdminComplaintDetail: React.FC = () => {
                       onChange={(e) => setStaffDeptFilter(e.target.value)}
                     >
                       <option value="ALL">All Departments</option>
-                      {mockDepartments.map((d) => (
+                      {departments.map((d) => (
                         <option key={d.id} value={d.name}>
                           {d.name}
                         </option>

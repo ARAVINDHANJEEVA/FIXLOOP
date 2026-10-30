@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   CheckCircle2,
@@ -8,9 +8,12 @@ import {
   AlertTriangle,
   RotateCcw,
 } from 'lucide-react';
-import { mockComplaints } from '../../data/mockData';
+import { Complaint, Category } from '../../types';
+import { complaintApi, categoryApi } from '../../api';
 import { useAuth } from '../../hooks/useAuth';
+import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
 import CategoryIcon from '../../components/ui/CategoryIcon';
+import ErrorState from '../../components/ui/ErrorState';
 import { getCategoryColor, truncate } from '../../utils/helpers';
 
 interface ResolutionHistoryProps {
@@ -21,6 +24,11 @@ const ResolutionHistory: React.FC<ResolutionHistoryProps> = ({ role }) => {
   const { user } = useAuth();
   const navigate = useNavigate();
 
+  const [isLoading, setIsLoading] = useState(true);
+  const [isError, setIsError] = useState(false);
+  const [complaints, setComplaints] = useState<Complaint[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+
   // Filters State — Custom Date Window only
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
@@ -29,18 +37,42 @@ const ResolutionHistory: React.FC<ResolutionHistoryProps> = ({ role }) => {
   const [selectedSla, setSelectedSla] = useState<'ALL' | 'MET' | 'BREACHED'>('ALL');
   const [sortBy, setSortBy] = useState<'DATE_DESC' | 'DATE_ASC' | 'TIME_FAST' | 'PRIORITY_HIGH'>('DATE_DESC');
 
+  const loadHistory = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      setIsError(false);
+      const [queueRes, catsRes] = await Promise.all([
+        role === 'admin'
+          ? complaintApi.getAdminQueue({ size: 100 })
+          : complaintApi.getStaffQueue({ size: 100 }),
+        categoryApi.getAll(),
+      ]);
+
+      setComplaints(queueRes.content || []);
+      setCategories(catsRes || []);
+    } catch {
+      setIsError(true);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [role]);
+
+  useEffect(() => {
+    loadHistory();
+  }, [loadHistory]);
+
   // 1. Filter out only resolved/closed complaints, scoped to staff member if in staff view
   const baseResolved = useMemo(() => {
-    return mockComplaints.filter((c) => {
+    return complaints.filter((c) => {
       const isResolved = c.status === 'RESOLVED' || c.status === 'CLOSED';
       if (!isResolved) return false;
       if (role === 'staff') {
         const staffId = user?.id || 'stf-5';
-        return c.assignedToStaffId === staffId;
+        return c.assignedToStaffId === staffId || !c.assignedToStaffId;
       }
       return true;
     });
-  }, [role, user]);
+  }, [complaints, role, user]);
 
   // 2. Filter by search, category, SLA, and custom date range
   const filteredComplaints = useMemo(() => {
@@ -244,13 +276,11 @@ const ResolutionHistory: React.FC<ResolutionHistoryProps> = ({ role }) => {
             onChange={(e) => setSelectedCategory(e.target.value)}
           >
             <option value="ALL">All Categories</option>
-            <option value="Hostel">Hostel</option>
-            <option value="Food">Food</option>
-            <option value="Health">Health</option>
-            <option value="Hygiene">Hygiene</option>
-            <option value="Tech Support">Tech Support</option>
-            <option value="Academic">Academic</option>
-            <option value="Harassment">Harassment</option>
+            {categories.map((cat) => (
+              <option key={cat.id} value={cat.name}>
+                {cat.name}
+              </option>
+            ))}
           </select>
 
           {/* SLA Filter */}
@@ -309,7 +339,19 @@ const ResolutionHistory: React.FC<ResolutionHistoryProps> = ({ role }) => {
         </div>
 
         {/* Clean Unified Data Table */}
-        {sortedComplaints.length === 0 ? (
+        {isLoading ? (
+          <div style={{ padding: '24px' }}>
+            <LoadingSkeleton rows={5} type="card" />
+          </div>
+        ) : isError ? (
+          <div style={{ padding: '24px' }}>
+            <ErrorState
+              title="Failed to Load Resolution History"
+              message="Could not load historical resolved tickets from the server. Please check your network connection."
+              onRetry={loadHistory}
+            />
+          </div>
+        ) : sortedComplaints.length === 0 ? (
           <div className="empty-state">
             <div className="empty-state-icon">
               <Calendar size={26} />

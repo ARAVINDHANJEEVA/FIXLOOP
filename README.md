@@ -12,7 +12,6 @@ FIXLOOP/
 ├── web/                     # React + TypeScript Dashboard (Admin Central Triage & Staff Queue)
 ├── mobile/                  # Android Student Application (Kotlin & Jetpack Compose)
 ├── docker/                  # Docker Compose Infrastructure (PostgreSQL 16)
-├── docs/                    # Architecture Specs, ERD, API Contracts & Workflows
 └── README.md
 ```
 
@@ -26,7 +25,6 @@ FIXLOOP/
 | [`backend/`](./backend) | Spring Boot 3.3, Java 21, JPA/Hibernate, PostgreSQL, STOMP | RESTful API and WebSocket backend managing authentication, role-based JWT clearance, SLA escalation cron jobs, and intelligent dispatch. |
 | [`mobile/`](./mobile) | Kotlin, Jetpack Compose, Retrofit, Room, FCM | Native Android student mobile application supporting dynamic category forms, token tracking, offline drafts, and push updates. |
 | [`docker/`](./docker) | Docker Compose, PostgreSQL 16 Alpine | Local database container with persistent named volume and health checks. |
-| [`docs/`](./docs) | Mermaid ERD, OpenAPI specs, System Requirements | Architectural documentation, database schema definitions, and API specifications. |
 
 ---
 
@@ -46,6 +44,32 @@ $$\begin{aligned}
 ---
 
 ## 4. Quick Start Guide
+
+### 4.0 One-Click Launch (Recommended for Windows)
+
+From the project root directory, you can start everything with a single command or by double-clicking:
+
+- **Run Full Stack (Database + Backend + Frontend)**:
+  ```cmd
+  run-all.bat
+  ```
+  *(Or in PowerShell: `.\run-all.ps1`)*
+
+- **Run Backend Only (Database + Spring Boot)**:
+  ```cmd
+  run-backend.bat
+  ```
+  *(Or in PowerShell: `.\run-backend.ps1`)*
+
+- **Stop All Services (Backend + Frontend + Database)**:
+  ```cmd
+  stop-all.bat
+  ```
+  *(Or in PowerShell: `.\stop-all.ps1`)*
+
+The scripts automatically detect Java 21, verify/start the PostgreSQL container, and launch the services in separate designated terminal windows.
+
+---
 
 ### 4.1 Database (Docker)
 ```bash

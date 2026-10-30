@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ShieldAlert,
@@ -11,9 +11,11 @@ import {
   User,
   FileCheck2,
 } from 'lucide-react';
-import { mockComplaints } from '../../data/mockData';
+import { Complaint } from '../../types';
+import { complaintApi } from '../../api';
 import StatusBadge from '../../components/ui/StatusBadge';
 import PriorityIndicator from '../../components/ui/PriorityIndicator';
+import ErrorState from '../../components/ui/ErrorState';
 import { truncate } from '../../utils/helpers';
 
 type RestrictedTab = 'ALL' | 'RAGGING' | 'HARASSMENT' | 'MALPRACTICE';
@@ -26,13 +28,24 @@ const RestrictedComplaints: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [anonymityFilter, setAnonymityFilter] = useState<'ALL' | 'ANONYMOUS' | 'DISCLOSED'>('ALL');
   const [sortBy, setSortBy] = useState<'PRIORITY' | 'DATE_DESC'>('PRIORITY');
+  const [complaints, setComplaints] = useState<Complaint[]>([]);
+  const [isError, setIsError] = useState(false);
 
-  // Filter restricted categories
-  const baseRestricted = useMemo(() => {
-    return mockComplaints.filter(
-      (c) => c.categoryName === 'Harassment' || c.categoryName === 'Malpractice' || c.categoryName === 'Ragging'
-    );
+  const fetchRestricted = async () => {
+    setIsError(false);
+    try {
+      const res = await complaintApi.getAdminQueue({ restricted: true });
+      setComplaints(res.content || []);
+    } catch {
+      setIsError(true);
+    }
+  };
+
+  useEffect(() => {
+    fetchRestricted();
   }, []);
+
+  const baseRestricted = complaints;
 
   const raggingCount = useMemo(
     () => baseRestricted.filter((c) => c.categoryName === 'Ragging').length,
@@ -180,7 +193,7 @@ const RestrictedComplaints: React.FC = () => {
               whiteSpace: 'nowrap',
             }}
           >
-            Audit ID: SNT-SEC-2026
+            Audit ID: FXL-SEC-2026
           </span>
         </div>
 
@@ -328,7 +341,15 @@ const RestrictedComplaints: React.FC = () => {
         </div>
 
         {/* Restricted Data Table */}
-        {sortedComplaints.length === 0 ? (
+        {isError ? (
+          <div style={{ padding: '24px 0' }}>
+            <ErrorState
+              title="Failed to Load Restricted Complaints"
+              message="Could not fetch restricted complaints from the server. Please verify your clearance and network connection."
+              onRetry={fetchRestricted}
+            />
+          </div>
+        ) : sortedComplaints.length === 0 ? (
           <div className="empty-state">
             <div className="empty-state-icon">
               <FileCheck2 size={28} style={{ color: 'var(--success)' }} />

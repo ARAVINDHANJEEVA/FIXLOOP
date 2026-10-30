@@ -253,7 +253,7 @@ export const mockComplaints: Complaint[] = [
   // 1 — CRITICAL, AT_RISK
   {
     id: 'cmp-001',
-    token: 'SNT-2026-000182',
+    token: 'FXL-2026-000182',
     categoryId: 'cat-4',
     categoryName: 'Health',
     locationId: 'loc-1',
@@ -285,13 +285,13 @@ export const mockComplaints: Complaint[] = [
     attachments: [
       { id: 'att-1', fileUrl: 'https://placehold.co/400x300/1a1f35/6366f1?text=Infirmary+Report', fileName: 'infirmary_report.jpg', mimeType: 'image/jpeg' },
     ],
-    siblingTokens: ['SNT-2026-000183', 'SNT-2026-000184', 'SNT-2026-000185'],
+    siblingTokens: ['FXL-2026-000183', 'FXL-2026-000184', 'FXL-2026-000185'],
     escalationLevel: 1,
   },
   // 2 — BREACHED
   {
     id: 'cmp-002',
-    token: 'SNT-2026-000165',
+    token: 'FXL-2026-000165',
     categoryId: 'cat-1',
     categoryName: 'Hostel',
     locationId: 'loc-2',
@@ -323,13 +323,13 @@ export const mockComplaints: Complaint[] = [
       { id: 'att-2', fileUrl: 'https://placehold.co/400x300/1a1f35/ef4444?text=Ceiling+Leak', fileName: 'ceiling_leak.jpg', mimeType: 'image/jpeg' },
       { id: 'att-3', fileUrl: 'https://placehold.co/400x300/1a1f35/ef4444?text=Water+Damage', fileName: 'water_damage.jpg', mimeType: 'image/jpeg' },
     ],
-    siblingTokens: ['SNT-2026-000166', 'SNT-2026-000167'],
+    siblingTokens: ['FXL-2026-000166', 'FXL-2026-000167'],
     escalationLevel: 2,
   },
   // 3 — IN_PROGRESS, VENDOR
   {
     id: 'cmp-003',
-    token: 'SNT-2026-000201',
+    token: 'FXL-2026-000201',
     categoryId: 'cat-6',
     categoryName: 'Tech Support',
     locationId: 'loc-3',
@@ -362,12 +362,12 @@ export const mockComplaints: Complaint[] = [
     attachments: [
       { id: 'att-4', fileUrl: 'https://placehold.co/400x300/1a1f35/06b6d4?text=BSOD+Error', fileName: 'bsod_error.jpg', mimeType: 'image/jpeg' },
     ],
-    siblingTokens: ['SNT-2026-000202', 'SNT-2026-000203'],
+    siblingTokens: ['FXL-2026-000202', 'FXL-2026-000203'],
   },
   // 4 — AWAITING INFO
   {
     id: 'cmp-004',
-    token: 'SNT-2026-000198',
+    token: 'FXL-2026-000198',
     categoryId: 'cat-2',
     categoryName: 'Food',
     locationId: 'loc-4',
@@ -398,7 +398,7 @@ export const mockComplaints: Complaint[] = [
   // 5 — RESOLVED
   {
     id: 'cmp-005',
-    token: 'SNT-2026-000155',
+    token: 'FXL-2026-000155',
     categoryId: 'cat-5',
     categoryName: 'Hygiene',
     locationId: 'loc-5',
@@ -431,7 +431,7 @@ export const mockComplaints: Complaint[] = [
   // 6 — REOPENED
   {
     id: 'cmp-006',
-    token: 'SNT-2026-000140',
+    token: 'FXL-2026-000140',
     categoryId: 'cat-1',
     categoryName: 'Hostel',
     locationId: 'loc-6',
@@ -461,7 +461,7 @@ export const mockComplaints: Complaint[] = [
   // 7 — SUBMITTED (fresh)
   {
     id: 'cmp-007',
-    token: 'SNT-2026-000215',
+    token: 'FXL-2026-000215',
     categoryId: 'cat-3',
     categoryName: 'Academic',
     locationId: 'loc-7',
@@ -484,7 +484,7 @@ export const mockComplaints: Complaint[] = [
   // 8 — SENSITIVE, ANONYMOUS (Harassment)
   {
     id: 'cmp-008',
-    token: 'SNT-2026-000210',
+    token: 'FXL-2026-000210',
     categoryId: 'cat-7',
     categoryName: 'Harassment',
     locationId: 'loc-8',
@@ -507,7 +507,7 @@ export const mockComplaints: Complaint[] = [
   // 9 — SENSITIVE (Malpractice)
   {
     id: 'cmp-009',
-    token: 'SNT-2026-000205',
+    token: 'FXL-2026-000205',
     categoryId: 'cat-8',
     categoryName: 'Malpractice',
     locationId: 'loc-9',
@@ -531,7 +531,7 @@ export const mockComplaints: Complaint[] = [
   // 10 — CLOSED (old)
   {
     id: 'cmp-010',
-    token: 'SNT-2026-000121',
+    token: 'FXL-2026-000121',
     categoryId: 'cat-6',
     categoryName: 'Tech Support',
     locationId: 'loc-10',
@@ -563,7 +563,7 @@ export const mockComplaints: Complaint[] = [
   // 11 — Another hostel complaint
   {
     id: 'cmp-011',
-    token: 'SNT-2026-000207',
+    token: 'FXL-2026-000207',
     categoryId: 'cat-1',
     categoryName: 'Hostel',
     locationId: 'loc-11',
@@ -593,7 +593,7 @@ export const mockComplaints: Complaint[] = [
   // 12 — Food (SUBMITTED)
   {
     id: 'cmp-012',
-    token: 'SNT-2026-000212',
+    token: 'FXL-2026-000212',
     categoryId: 'cat-2',
     categoryName: 'Food',
     locationId: 'loc-4',
@@ -617,12 +617,12 @@ export const mockComplaints: Complaint[] = [
     attachments: [
       { id: 'att-5', fileUrl: 'https://placehold.co/400x300/1a1f35/f59e0b?text=Food+Issue', fileName: 'food_issue.jpg', mimeType: 'image/jpeg' },
     ],
-    siblingTokens: ['SNT-2026-000213', 'SNT-2026-000214'],
+    siblingTokens: ['FXL-2026-000213', 'FXL-2026-000214'],
   },
   // 13 — RESOLVED (September 2026) - Assigned to Deepak Joshi (stf-5)
   {
     id: 'cmp-013',
-    token: 'SNT-2026-000220',
+    token: 'FXL-2026-000220',
     categoryId: 'cat-6',
     categoryName: 'Tech Support',
     locationId: 'loc-3',
@@ -654,7 +654,7 @@ export const mockComplaints: Complaint[] = [
   // 14 — RESOLVED (September 2026) - Assigned to Vikram Singh (stf-1)
   {
     id: 'cmp-014',
-    token: 'SNT-2026-000218',
+    token: 'FXL-2026-000218',
     categoryId: 'cat-1',
     categoryName: 'Hostel',
     locationId: 'loc-2',
@@ -684,7 +684,7 @@ export const mockComplaints: Complaint[] = [
   // 15 — RESOLVED (August 2026) - Assigned to Deepak Joshi (stf-5)
   {
     id: 'cmp-015',
-    token: 'SNT-2026-000170',
+    token: 'FXL-2026-000170',
     categoryId: 'cat-6',
     categoryName: 'Tech Support',
     locationId: 'loc-8',
@@ -714,7 +714,7 @@ export const mockComplaints: Complaint[] = [
   // 16 — RESOLVED (August 2026) - Assigned to Suresh Babu (stf-3)
   {
     id: 'cmp-016',
-    token: 'SNT-2026-000162',
+    token: 'FXL-2026-000162',
     categoryId: 'cat-2',
     categoryName: 'Food',
     locationId: 'loc-4',
@@ -743,7 +743,7 @@ export const mockComplaints: Complaint[] = [
   // 17 — RESOLVED (August 2026 - BREACHED SLA) - Assigned to Anita Rao (stf-2)
   {
     id: 'cmp-017',
-    token: 'SNT-2026-000150',
+    token: 'FXL-2026-000150',
     categoryId: 'cat-1',
     categoryName: 'Hostel',
     locationId: 'loc-6',
@@ -773,7 +773,7 @@ export const mockComplaints: Complaint[] = [
   // 18 — RESOLVED (July 2026) - Assigned to Deepak Joshi (stf-5)
   {
     id: 'cmp-018',
-    token: 'SNT-2026-000125',
+    token: 'FXL-2026-000125',
     categoryId: 'cat-6',
     categoryName: 'Tech Support',
     locationId: 'loc-7',
@@ -803,7 +803,7 @@ export const mockComplaints: Complaint[] = [
   // 19 — RESOLVED (July 2026) - Assigned to Ravi Chandran (stf-7)
   {
     id: 'cmp-019',
-    token: 'SNT-2026-000110',
+    token: 'FXL-2026-000110',
     categoryId: 'cat-3',
     categoryName: 'Academic',
     locationId: 'loc-7',
@@ -832,7 +832,7 @@ export const mockComplaints: Complaint[] = [
   // 20 — RESOLVED (June 2026) - Assigned to Deepak Joshi (stf-5)
   {
     id: 'cmp-020',
-    token: 'SNT-2026-000085',
+    token: 'FXL-2026-000085',
     categoryId: 'cat-6',
     categoryName: 'Tech Support',
     locationId: 'loc-3',
@@ -861,7 +861,7 @@ export const mockComplaints: Complaint[] = [
   // 21 — RESOLVED (May 2026) - Assigned to Deepak Joshi (stf-5)
   {
     id: 'cmp-021',
-    token: 'SNT-2026-000045',
+    token: 'FXL-2026-000045',
     categoryId: 'cat-6',
     categoryName: 'Tech Support',
     locationId: 'loc-3',
@@ -890,7 +890,7 @@ export const mockComplaints: Complaint[] = [
   // 22 — RAGGING (UNDER_ADMIN_REVIEW, Anonymous Whistleblower)
   {
     id: 'cmp-022',
-    token: 'SNT-2026-000240',
+    token: 'FXL-2026-000240',
     categoryId: 'cat-9',
     categoryName: 'Ragging',
     locationId: 'loc-6',
@@ -915,7 +915,7 @@ export const mockComplaints: Complaint[] = [
   // 23 — RAGGING (ASSIGNED, Disclosed Student)
   {
     id: 'cmp-023',
-    token: 'SNT-2026-000241',
+    token: 'FXL-2026-000241',
     categoryId: 'cat-9',
     categoryName: 'Ragging',
     locationId: 'loc-12',
@@ -946,7 +946,7 @@ export const mockComplaints: Complaint[] = [
   // 24 — RAGGING (IN_PROGRESS, Anonymous Whistleblower, Urgent At Risk)
   {
     id: 'cmp-024',
-    token: 'SNT-2026-000242',
+    token: 'FXL-2026-000242',
     categoryId: 'cat-9',
     categoryName: 'Ragging',
     locationId: 'loc-13',
@@ -1043,11 +1043,11 @@ export const mockStaffPerformance: StaffPerformanceData[] = [
 // ============================================================
 
 export const mockNotifications: Notification[] = [
-  { id: 'notif-1', type: 'SLA_ALERT', title: 'SLA Breach Alert', message: 'SNT-2026-000165 has breached SLA — 15 hours overdue', complaintId: 'cmp-002', complaintToken: 'SNT-2026-000165', timestamp: hoursAgo(1), read: false },
-  { id: 'notif-2', type: 'NEW_COMPLAINT', title: 'New Complaint Received', message: 'SNT-2026-000215 submitted — Academic complaint from Mohan K.', complaintId: 'cmp-007', complaintToken: 'SNT-2026-000215', timestamp: hoursAgo(1), read: false },
-  { id: 'notif-3', type: 'SLA_ALERT', title: 'At-Risk Warning', message: 'SNT-2026-000182 approaching SLA deadline — 2 hours remaining', complaintId: 'cmp-001', complaintToken: 'SNT-2026-000182', timestamp: hoursAgo(2), read: false },
-  { id: 'notif-4', type: 'STATUS_CHANGE', title: 'Complaint Reopened', message: 'SNT-2026-000140 was reopened by the student', complaintId: 'cmp-006', complaintToken: 'SNT-2026-000140', timestamp: daysAgo(1), read: true },
-  { id: 'notif-5', type: 'ASSIGNMENT', title: 'New Assignment', message: 'You have been assigned SNT-2026-000201 — Lab CS-204 BSOD', complaintId: 'cmp-003', complaintToken: 'SNT-2026-000201', timestamp: hoursAgo(18), read: true },
+  { id: 'notif-1', type: 'SLA_ALERT', title: 'SLA Breach Alert', message: 'FXL-2026-000165 has breached SLA — 15 hours overdue', complaintId: 'cmp-002', complaintToken: 'FXL-2026-000165', timestamp: hoursAgo(1), read: false },
+  { id: 'notif-2', type: 'NEW_COMPLAINT', title: 'New Complaint Received', message: 'FXL-2026-000215 submitted — Academic complaint from Mohan K.', complaintId: 'cmp-007', complaintToken: 'FXL-2026-000215', timestamp: hoursAgo(1), read: false },
+  { id: 'notif-3', type: 'SLA_ALERT', title: 'At-Risk Warning', message: 'FXL-2026-000182 approaching SLA deadline — 2 hours remaining', complaintId: 'cmp-001', complaintToken: 'FXL-2026-000182', timestamp: hoursAgo(2), read: false },
+  { id: 'notif-4', type: 'STATUS_CHANGE', title: 'Complaint Reopened', message: 'FXL-2026-000140 was reopened by the student', complaintId: 'cmp-006', complaintToken: 'FXL-2026-000140', timestamp: daysAgo(1), read: true },
+  { id: 'notif-5', type: 'ASSIGNMENT', title: 'New Assignment', message: 'You have been assigned FXL-2026-000201 — Lab CS-204 BSOD', complaintId: 'cmp-003', complaintToken: 'FXL-2026-000201', timestamp: hoursAgo(18), read: true },
 ];
 
 // ============================================================

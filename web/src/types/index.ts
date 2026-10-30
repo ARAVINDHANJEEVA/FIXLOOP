@@ -1,5 +1,5 @@
 // ============================================================
-// SENTINEL — Type Definitions
+// FIXLOOP — Type Definitions
 // ============================================================
 
 export type Role = 'ADMIN' | 'STAFF';
@@ -189,10 +189,42 @@ export interface Complaint {
   isAtRisk?: boolean;
   isBreached?: boolean;
   siblingTokens?: string[];
+  /** Integer IDs of sibling complaints in the same cluster, for comma display */
+  siblingIds?: string[];
+  /** True if an admin manually excluded this complaint from auto-clustering */
+  clusterExcluded?: boolean;
+  /** Clustering confidence score (0.0–1.0) */
+  clusterScore?: number;
+  /** Full cluster detail when complaint belongs to an incident */
+  incident?: IncidentSummary;
 }
 
 // ============================================================
-// INCIDENT
+// CLUSTER
+// ============================================================
+
+export interface ClusterMember {
+  id: string;
+  token: string;
+  description: string;
+  status: ComplaintStatus;
+  clusterScore?: number;
+  createdAt: string;
+}
+
+export interface IncidentSummary {
+  id: string;
+  status: string;
+  complaintCount: number;
+  /** First complaint's description — display summary for incident card */
+  summary?: string;
+  members: ClusterMember[];
+  createdAt: string;
+  lastComplaintAt: string;
+}
+
+// ============================================================
+// INCIDENT (legacy — full incident aggregate)
 // ============================================================
 
 export interface Incident {

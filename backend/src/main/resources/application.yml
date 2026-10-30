@@ -6,30 +6,52 @@ server:
 spring:
   application:
     name: fixloop-backend
+
   datasource:
     url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:fixloop_db}
     username: ${POSTGRES_USER:fixloop_user}
     password: ${POSTGRES_PASSWORD:fixloop_secret}
     driver-class-name: org.postgresql.Driver
+
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate          # Flyway owns schema; Hibernate only validates
     show-sql: false
     properties:
       hibernate:
         format_sql: true
         dialect: org.hibernate.dialect.PostgreSQLDialect
 
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true     # Safe for first run on existing DB
+
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 10MB
+      max-request-size: 30MB
+
 # FixLoop JWT Security
 security:
   jwt:
-    secret-key: 404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
-    expiration-time-ms: 86400000 # 24 Hours
+    secret-key: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
+    expiration-time-ms: ${JWT_EXPIRATION_MS:86400000}  # 24 hours
 
 # Dynamic Priority Scoring Default Weights
 fixloop:
   priority:
-    w1: 0.48 # severity_norm
-    w2: 0.21 # scale_norm
-    w3: 0.08 # recurrence_norm
-    w4: 0.23 # time_urgency_norm
+    w1: 0.48    # severity_norm
+    w2: 0.21    # scale_norm
+    w3: 0.08    # recurrence_norm
+    w4: 0.23    # time_urgency_norm
+  sla:
+    at-risk-buffer-hours: 2      # Hours before deadline to flag AT_RISK
+    cluster-window-hours: 72     # Hours window for incident clustering
+    scheduler-interval-ms: 300000 # 5 minutes
+  uploads:
+    base-path: ${UPLOADS_BASE_PATH:uploads/attachments}
+  fcm:
+    enabled: false              # set to true + provide credentials-path to enable FCM push
+    credentials-path: ${FCM_CREDENTIALS_PATH:""}        # path to Firebase service account JSON file

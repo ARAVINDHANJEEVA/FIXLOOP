@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bg_paper">#F6F1E7</color>
+    <color name="surface_card">#FFFFFF</color>
+    <color name="ink">#1B1B17</color>
+    <color name="ink_muted">#6F6B60</color>
+    <color name="hazard_amber">#FFC42B</color>
+    <color name="cone_orange">#FF6B35</color>
+    <color name="idcard_blue">#2A4494</color>
+    <color name="clearance_green">#1F9E63</color>
+    <color name="alert_red">#E3483A</color>
+    <color name="concrete_gray">#8A867C</color>
+</resources>

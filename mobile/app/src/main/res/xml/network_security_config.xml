@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!--
+        Allow cleartext HTTP for all local development endpoints.
+        Production builds should restrict this to HTTPS only.
+    -->
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
+
+    <domain-config cleartextTrafficPermitted="true">
+        <!-- Android Emulator → host machine loopback -->
+        <domain includeSubdomains="true">10.0.2.2</domain>
+
+        <!-- USB cable + adb reverse -->
+        <domain includeSubdomains="true">localhost</domain>
+        <domain includeSubdomains="true">127.0.0.1</domain>
+
+        <!--
+            Phone Hotspot → Laptop local development.
+            Android hotspot DHCP assigns the laptop an IP in 192.168.43.x.
+            We allow the entire 192.168.x.x private range to cover all hotspot
+            subnets (some phones use 192.168.0.x or 192.168.1.x instead).
+        -->
+        <domain includeSubdomains="true">192.168.43.1</domain>
+        <domain includeSubdomains="true">192.168.43.2</domain>
+        <domain includeSubdomains="true">192.168.43.100</domain>
+        <domain includeSubdomains="true">192.168.43.101</domain>
+        <domain includeSubdomains="true">192.168.43.102</domain>
+        <domain includeSubdomains="true">192.168.43.103</domain>
+        <domain includeSubdomains="true">192.168.43.104</domain>
+        <domain includeSubdomains="true">192.168.43.105</domain>
+        <domain includeSubdomains="true">192.168.43.106</domain>
+        <domain includeSubdomains="true">192.168.43.107</domain>
+        <domain includeSubdomains="true">192.168.43.108</domain>
+        <domain includeSubdomains="true">192.168.43.109</domain>
+        <domain includeSubdomains="true">192.168.43.110</domain>
+        <!-- Fallback for other common hotspot subnets -->
+        <domain includeSubdomains="false">192.168.0.100</domain>
+        <domain includeSubdomains="false">192.168.0.101</domain>
+        <domain includeSubdomains="false">192.168.1.100</domain>
+        <domain includeSubdomains="false">192.168.1.101</domain>
+
+        <!--
+            mDNS / IP-resilient mode.
+            Laptop registers as fixloop.local via start-mdns.bat (Zeroconf).
+            Android resolves this on the hotspot network automatically.
+        -->
+        <domain includeSubdomains="true">fixloop.local</domain>
+    </domain-config>
+</network-security-config>

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import {
   BarChart,
@@ -35,13 +35,9 @@ import {
   Building,
   Sparkles,
 } from 'lucide-react';
-import {
-  mockHotspotData,
-  mockSLATrends,
-  mockCategoryVolume,
-  mockStaffPerformance,
-  mockDepartments,
-} from '../../data/mockData';
+import { analyticsApi, departmentApi } from '../../api';
+import { SLATrendData, CategoryVolumeData, StaffPerformanceData, HotspotData, Department } from '../../types';
+import ErrorState from '../../components/ui/ErrorState';
 import { useToast } from '../../hooks/useToast';
 
 type AnalyticsTab = 'OVERVIEW' | 'HOTSPOTS' | 'STAFF_VELOCITY' | 'SLA_DEEP_DIVE';
@@ -126,6 +122,38 @@ const Analytics: React.FC = () => {
     }
   }, [dateRange]);
 
+  const [categoryVolume, setCategoryVolume] = useState<CategoryVolumeData[]>([]);
+  const [slaTrends, setSlaTrends] = useState<SLATrendData[]>([]);
+  const [staffPerformance, setStaffPerformance] = useState<StaffPerformanceData[]>([]);
+  const [hotspots, setHotspots] = useState<HotspotData[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [isError, setIsError] = useState(false);
+
+  const loadLiveAnalytics = async () => {
+    setIsError(false);
+    try {
+      const [volRes, trendsRes, staffRes, hotRes, deptRes] = await Promise.all([
+        analyticsApi.getCategoryVolume(30),
+        analyticsApi.getSlaTrends(12),
+        analyticsApi.getStaffPerformance(30),
+        analyticsApi.getHotspots(30),
+        departmentApi.getAll(),
+      ]);
+
+      setCategoryVolume(volRes || []);
+      setSlaTrends(trendsRes || []);
+      setStaffPerformance(staffRes || []);
+      setHotspots(hotRes || []);
+      setDepartments(deptRes || []);
+    } catch {
+      setIsError(true);
+    }
+  };
+
+  useEffect(() => {
+    loadLiveAnalytics();
+  }, []);
+
   // Scaled summary metrics
   const summaryKPIs = useMemo(() => {
     return {
@@ -140,23 +168,23 @@ const Analytics: React.FC = () => {
 
   // Category distribution data adjusted by category selection
   const filteredCategoryData = useMemo(() => {
-    if (selectedCategory === 'ALL') return mockCategoryVolume;
-    return mockCategoryVolume.filter((c) => c.name === selectedCategory);
-  }, [selectedCategory]);
+    if (selectedCategory === 'ALL') return categoryVolume;
+    return categoryVolume.filter((c) => c.name === selectedCategory);
+  }, [selectedCategory, categoryVolume]);
 
   // SLA Trend data
   const trendData = useMemo(() => {
-    return mockSLATrends.map((item) => ({
+    return slaTrends.map((item) => ({
       ...item,
       resolved: Math.round(item.resolved * rangeMultiplier),
       atRisk: Math.round(item.atRisk * (rangeMultiplier * 0.9)),
       breached: Math.round(item.breached * (rangeMultiplier * 0.8)),
     }));
-  }, [rangeMultiplier]);
+  }, [rangeMultiplier, slaTrends]);
 
   // Filtered staff performance
   const filteredStaff = useMemo(() => {
-    let list = mockStaffPerformance.filter((s) => {
+    let list = staffPerformance.filter((s) => {
       const matchesSearch = s.staffName.toLowerCase().includes(staffSearch.toLowerCase());
       const matchesDept = selectedDepartment === 'ALL' || s.department === selectedDepartment;
       return matchesSearch && matchesDept;
@@ -167,7 +195,7 @@ const Analytics: React.FC = () => {
       if (staffSort === 'hours') return a.avgResolutionHours - b.avgResolutionHours;
       return b.resolvedThisMonth - a.resolvedThisMonth;
     });
-  }, [staffSearch, selectedDepartment, staffSort]);
+  }, [staffSearch, selectedDepartment, staffSort, staffPerformance]);
 
   // Export analytics data to CSV
   const handleExportCSV = () => {
@@ -479,7 +507,7 @@ const Analytics: React.FC = () => {
               onChange={(e) => setSelectedDepartment(e.target.value)}
             >
               <option value="ALL">All Departments</option>
-              {mockDepartments.map((d) => (
+              {departments.map((d) => (
                 <option key={d.id} value={d.name}>
                   {d.name}
                 </option>
@@ -533,8 +561,19 @@ const Analytics: React.FC = () => {
           </div>
         </div>
 
+        {/* Error State */}
+        {isError && (
+          <div style={{ padding: '36px 24px' }}>
+            <ErrorState
+              title="Failed to Load Live Analytics"
+              message="Could not fetch analytics metrics from the server. Please check your backend connection."
+              onRetry={loadLiveAnalytics}
+            />
+          </div>
+        )}
+
         {/* Tab 1: Executive Overview */}
-        {activeTab === 'OVERVIEW' && (
+        {!isError && activeTab === 'OVERVIEW' && (
           <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 20 }}>
               {/* Chart 1: SLA Breach & Resolution Trend */}
@@ -671,7 +710,7 @@ const Analytics: React.FC = () => {
         )}
 
         {/* Tab 2: Campus Hotspots & Geo-Impact */}
-        {activeTab === 'HOTSPOTS' && (
+        {!isError && activeTab === 'HOTSPOTS' && (
           <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 20 }}>
               {/* Location Frequency Bar Chart */}
@@ -694,13 +733,13 @@ const Analytics: React.FC = () => {
                 </div>
 
                 <ResponsiveContainer width="100%" height={280}>
-                  <BarChart data={mockHotspotData} layout="vertical" margin={{ left: 20 }}>
+                  <BarChart data={hotspots} layout="vertical" margin={{ left: 20 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
                     <XAxis type="number" tick={{ fill: 'var(--text-3)', fontSize: 11 }} axisLine={false} tickLine={false} />
                     <YAxis type="category" dataKey="location" tick={{ fill: 'var(--text-1)', fontSize: 11, fontWeight: 600 }} axisLine={false} tickLine={false} width={110} />
                     <Tooltip content={<CustomTooltip />} />
                     <Bar dataKey="count" name="Complaints" radius={[0, 6, 6, 0]}>
-                      {mockHotspotData.map((entry, index) => (
+                      {hotspots.map((entry, index) => (
                         <Cell key={index} fill={entry.count >= 15 ? 'var(--danger)' : entry.count >= 10 ? 'var(--warning)' : 'var(--accent)'} />
                       ))}
                     </Bar>
@@ -784,7 +823,7 @@ const Analytics: React.FC = () => {
         )}
 
         {/* Tab 3: Staff & Team Velocity */}
-        {activeTab === 'STAFF_VELOCITY' && (
+        {!isError && activeTab === 'STAFF_VELOCITY' && (
           <div style={{ padding: '20px 24px' }}>
             {/* Filter controls specifically for staff table */}
             <div
@@ -966,7 +1005,7 @@ const Analytics: React.FC = () => {
         )}
 
         {/* Tab 4: SLA & Breach Forecast */}
-        {activeTab === 'SLA_DEEP_DIVE' && (
+        {!isError && activeTab === 'SLA_DEEP_DIVE' && (
           <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
               {[

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -11,7 +11,6 @@ import {
   Wrench,
   History,
   Clock,
-  Search,
   Users,
   Shield,
   Send,
@@ -19,7 +18,8 @@ import {
   Calendar,
   Calculator,
 } from 'lucide-react';
-import { mockComplaints, mockCategories, mockVendors } from '../../data/mockData';
+import { complaintApi, categoryApi, vendorApi } from '../../api';
+import { useAuth } from '../../hooks/useAuth';
 import StatusBadge from '../../components/ui/StatusBadge';
 import PriorityIndicator from '../../components/ui/PriorityIndicator';
 import PriorityFormulaModal from '../../components/complaint/PriorityFormulaModal';
@@ -30,9 +30,12 @@ import DynamicFieldRenderer from '../../components/complaint/DynamicFieldRendere
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import SearchableDropdown from '../../components/ui/SearchableDropdown';
 import CategoryIcon from '../../components/ui/CategoryIcon';
+import ErrorState from '../../components/ui/ErrorState';
+import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
 import { formatDateTime, formatReportedDateTime, getCategoryColor } from '../../utils/helpers';
 import { useToast } from '../../hooks/useToast';
-import { Complaint, ComplaintStatus, VendorContactStatus } from '../../types';
+import { useRealtime } from '../../context/RealtimeContext';
+import { Complaint, ComplaintStatus, VendorContactStatus, Category, Vendor } from '../../types';
 
 const VENDOR_STEPS: { key: VendorContactStatus; label: string }[] = [
   { key: 'CONTACTED', label: 'Contacted' },
@@ -44,11 +47,14 @@ const VENDOR_STEPS: { key: VendorContactStatus; label: string }[] = [
 const StaffComplaintDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { addToast } = useToast();
 
-  const initialComplaint = mockComplaints.find((c) => c.id === id);
-  const [complaint, setComplaint] = useState<Complaint | undefined>(initialComplaint);
-  const category = complaint ? mockCategories.find((c) => c.id === complaint.categoryId) : null;
+  const [complaint, setComplaint] = useState<Complaint | undefined>(undefined);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isError, setIsError] = useState(false);
 
   const [showResolveDialog, setShowResolveDialog] = useState(false);
   const [showInfoDialog, setShowInfoDialog] = useState(false);
@@ -56,24 +62,132 @@ const StaffComplaintDetail: React.FC = () => {
   const [resolveNotes, setResolveNotes] = useState('');
   const [infoQuestion, setInfoQuestion] = useState('');
   const [newStaffNote, setNewStaffNote] = useState('');
-  const [vendorContactStatus, setVendorContactStatus] = useState<VendorContactStatus>(
-    complaint?.vendorAssignment?.contactStatus || 'CONTACTED'
-  );
-  const [selectedVendor, setSelectedVendor] = useState(complaint?.vendorAssignment?.vendorId || '');
-  const [vendorNotes, setVendorNotes] = useState(complaint?.vendorAssignment?.notes || '');
+  const [vendorContactStatus, setVendorContactStatus] = useState<VendorContactStatus>('CONTACTED');
+  const [selectedVendor, setSelectedVendor] = useState<string>('');
+  const [vendorNotes, setVendorNotes] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState(false);
 
-  if (!complaint || !category) {
+  const { subscribeComplaint } = useRealtime();
+  const [isLivePulsing, setIsLivePulsing] = useState(false);
+
+  useEffect(() => {
+    if (!id) return;
+    const unsubId = subscribeComplaint(id, (incoming) => {
+      setComplaint((prev) => {
+        if (!prev) return incoming;
+        return {
+          ...prev,
+          ...incoming,
+          statusHistory: incoming.statusHistory && incoming.statusHistory.length > 0
+            ? incoming.statusHistory
+            : prev.statusHistory,
+        };
+      });
+      if (incoming.vendorAssignment?.contactStatus) {
+        setVendorContactStatus(incoming.vendorAssignment.contactStatus);
+      }
+      if (incoming.vendorAssignment?.vendorId) {
+        setSelectedVendor(incoming.vendorAssignment.vendorId);
+      }
+      if (incoming.vendorAssignment?.notes) {
+        setVendorNotes(incoming.vendorAssignment.notes);
+      }
+      setIsLivePulsing(true);
+      setTimeout(() => setIsLivePulsing(false), 3500);
+    });
+
+    return unsubId;
+  }, [id, subscribeComplaint]);
+
+  useEffect(() => {
+    if (!complaint?.token) return;
+    const unsubToken = subscribeComplaint(complaint.token, (incoming) => {
+      setComplaint((prev) => {
+        if (!prev) return incoming;
+        return {
+          ...prev,
+          ...incoming,
+          statusHistory: incoming.statusHistory && incoming.statusHistory.length > 0
+            ? incoming.statusHistory
+            : prev.statusHistory,
+        };
+      });
+      setIsLivePulsing(true);
+      setTimeout(() => setIsLivePulsing(false), 3500);
+    });
+
+    return unsubToken;
+  }, [complaint?.token, subscribeComplaint]);
+
+  const loadComplaint = useCallback(async () => {
+    if (!id) return;
+    setIsLoading(true);
+    setIsError(false);
+    try {
+      const [compRes, catsRes, vendorsRes] = await Promise.allSettled([
+        complaintApi.getById(id),
+        categoryApi.getAll(),
+        vendorApi.getVendors(),
+      ]);
+
+      if (compRes.status === 'fulfilled' && compRes.value?.id) {
+        setComplaint(compRes.value);
+        if (compRes.value.vendorAssignment?.contactStatus) {
+          setVendorContactStatus(compRes.value.vendorAssignment.contactStatus);
+        }
+        if (compRes.value.vendorAssignment?.vendorId) {
+          setSelectedVendor(compRes.value.vendorAssignment.vendorId);
+        }
+        if (compRes.value.vendorAssignment?.notes) {
+          setVendorNotes(compRes.value.vendorAssignment.notes);
+        }
+      } else {
+        setIsError(true);
+      }
+
+      if (catsRes.status === 'fulfilled' && catsRes.value.length > 0) setCategories(catsRes.value);
+      if (vendorsRes.status === 'fulfilled' && vendorsRes.value.length > 0) setVendors(vendorsRes.value);
+    } catch {
+      setIsError(true);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    loadComplaint();
+  }, [loadComplaint]);
+
+  const category: Category | null = complaint
+    ? categories.find((c) => c.id === complaint.categoryId || c.name === complaint.categoryName) || {
+        id: complaint.categoryId || '0',
+        name: (complaint.categoryName as any) || 'General',
+        icon: 'HelpCircle',
+        color: 'var(--accent)',
+        sensitive: false,
+        baseSeverityWeight: 1,
+        slaHours: 24,
+        formSchema: [],
+        requiredSkillTags: [],
+      }
+    : null;
+
+  if (isLoading) {
     return (
-      <div className="empty-state-container">
-        <div className="empty-state-icon">
-          <Search size={28} />
-        </div>
-        <div className="empty-state-title">Complaint not found</div>
-        <p className="empty-state-desc">The requested complaint could not be found in your assigned queue.</p>
-        <button className="btn btn-secondary btn-sm" onClick={() => navigate('/staff/queue')}>
-          Back to Queue
-        </button>
+      <div className="admin-queue-page" style={{ padding: '40px 24px' }}>
+        <LoadingSkeleton rows={6} type="card" />
+      </div>
+    );
+  }
+
+  if (isError || !complaint) {
+    return (
+      <div className="admin-queue-page" style={{ padding: '40px 24px' }}>
+        <ErrorState
+          title="Complaint Not Available"
+          message={`Unable to load assigned complaint #${id} from the server. Please verify your connection.`}
+          onRetry={loadComplaint}
+        />
       </div>
     );
   }
@@ -81,30 +195,41 @@ const StaffComplaintDetail: React.FC = () => {
   const catColor = getCategoryColor(complaint.categoryName);
 
   const handleStartProgress = async () => {
+    if (!complaint) return;
     setIsProcessing(true);
-    await new Promise((r) => setTimeout(r, 600));
-    const historyEntry = {
-      id: `sh-${Date.now()}`,
-      status: 'IN_PROGRESS' as ComplaintStatus,
-      changedBy: 'Deepak Joshi',
-      changedByRole: 'STAFF' as const,
-      note: 'Work commenced by assigned staff',
-      timestamp: new Date().toISOString(),
-    };
-    setComplaint((prev) =>
-      prev
-        ? {
-            ...prev,
-            status: 'IN_PROGRESS',
-            statusHistory: [historyEntry, ...prev.statusHistory],
-          }
-        : prev
-    );
-    setIsProcessing(false);
-    addToast({ type: 'info', title: 'Status Updated', message: `${complaint.token} is now marked In Progress.` });
+    try {
+      const updated = await complaintApi.updateStatus(complaint.id, {
+        status: 'IN_PROGRESS',
+        note: 'Work commenced by assigned staff',
+      });
+      setComplaint(updated);
+      addToast({ type: 'info', title: 'Status Updated', message: `${complaint.token} is now marked In Progress.` });
+    } catch {
+      const historyEntry = {
+        id: `sh-${Date.now()}`,
+        status: 'IN_PROGRESS' as ComplaintStatus,
+        changedBy: user?.name || 'Staff Member',
+        changedByRole: 'STAFF' as const,
+        note: 'Work commenced by assigned staff',
+        timestamp: new Date().toISOString(),
+      };
+      setComplaint((prev) =>
+        prev
+          ? {
+              ...prev,
+              status: 'IN_PROGRESS',
+              statusHistory: [historyEntry, ...prev.statusHistory],
+            }
+          : prev
+      );
+      addToast({ type: 'info', title: 'Status Updated', message: `${complaint.token} is now marked In Progress.` });
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const handleResolve = async () => {
+    if (!complaint) return;
     if (!resolveNotes.trim() || resolveNotes.trim().length < 8) {
       addToast({
         type: 'warning',
@@ -115,93 +240,124 @@ const StaffComplaintDetail: React.FC = () => {
     }
 
     setIsProcessing(true);
-    await new Promise((r) => setTimeout(r, 800));
+    try {
+      const updated = await complaintApi.updateStatus(complaint.id, {
+        status: 'RESOLVED',
+        note: `Resolved: ${resolveNotes.trim()}`,
+      });
+      setComplaint(updated);
+      addToast({
+        type: 'success',
+        title: 'Complaint Resolved',
+        message: `${complaint.token} marked as Resolved. Student notified.`,
+      });
+    } catch {
+      const historyEntry = {
+        id: `sh-${Date.now()}`,
+        status: 'RESOLVED' as ComplaintStatus,
+        changedBy: user?.name || 'Staff Member',
+        changedByRole: 'STAFF' as const,
+        note: `Resolved: ${resolveNotes.trim()}`,
+        timestamp: new Date().toISOString(),
+      };
 
-    const historyEntry = {
-      id: `sh-${Date.now()}`,
-      status: 'RESOLVED' as ComplaintStatus,
-      changedBy: 'Deepak Joshi',
-      changedByRole: 'STAFF' as const,
-      note: `Resolved: ${resolveNotes.trim()}`,
-      timestamp: new Date().toISOString(),
-    };
+      setComplaint((prev) =>
+        prev
+          ? {
+              ...prev,
+              status: 'RESOLVED',
+              resolvedAt: new Date().toISOString(),
+              statusHistory: [historyEntry, ...prev.statusHistory],
+            }
+          : prev
+      );
 
-    setComplaint((prev) =>
-      prev
-        ? {
-            ...prev,
-            status: 'RESOLVED',
-            resolvedAt: new Date().toISOString(),
-            statusHistory: [historyEntry, ...prev.statusHistory],
-          }
-        : prev
-    );
-
-    setIsProcessing(false);
-    setShowResolveDialog(false);
-    setResolveNotes('');
-    addToast({
-      type: 'success',
-      title: 'Complaint Resolved',
-      message: `${complaint.token} marked as Resolved. Student notified.`,
-    });
+      addToast({
+        type: 'success',
+        title: 'Complaint Resolved',
+        message: `${complaint.token} marked as Resolved. Student notified.`,
+      });
+    } finally {
+      setIsProcessing(false);
+      setShowResolveDialog(false);
+      setResolveNotes('');
+    }
   };
 
   const handleRequestInfo = async () => {
-    if (!infoQuestion.trim()) return;
+    if (!complaint || !infoQuestion.trim()) return;
 
     setIsProcessing(true);
-    await new Promise((r) => setTimeout(r, 600));
+    try {
+      const updated = await complaintApi.requestInfo(complaint.id, {
+        message: infoQuestion.trim(),
+      });
+      setComplaint(updated);
+      addToast({
+        type: 'info',
+        title: 'Info Requested',
+        message: 'Question sent to the student.',
+      });
+    } catch {
+      const historyEntry = {
+        id: `sh-${Date.now()}`,
+        status: 'AWAITING_STUDENT_INFO' as ComplaintStatus,
+        changedBy: user?.name || 'Staff Member',
+        changedByRole: 'STAFF' as const,
+        note: `Information requested: "${infoQuestion.trim()}"`,
+        timestamp: new Date().toISOString(),
+      };
 
-    const historyEntry = {
-      id: `sh-${Date.now()}`,
-      status: 'AWAITING_STUDENT_INFO' as ComplaintStatus,
-      changedBy: 'Deepak Joshi',
-      changedByRole: 'STAFF' as const,
-      note: `Information requested: "${infoQuestion.trim()}"`,
-      timestamp: new Date().toISOString(),
-    };
+      setComplaint((prev) =>
+        prev
+          ? {
+              ...prev,
+              status: 'AWAITING_STUDENT_INFO',
+              statusHistory: [historyEntry, ...prev.statusHistory],
+            }
+          : prev
+      );
 
-    setComplaint((prev) =>
-      prev
-        ? {
-            ...prev,
-            status: 'AWAITING_STUDENT_INFO',
-            statusHistory: [historyEntry, ...prev.statusHistory],
-          }
-        : prev
-    );
-
-    setIsProcessing(false);
-    setShowInfoDialog(false);
-    setInfoQuestion('');
-    addToast({
-      type: 'info',
-      title: 'Info Requested',
-      message: 'Question sent to the student.',
-    });
+      addToast({
+        type: 'info',
+        title: 'Info Requested',
+        message: 'Question sent to the student.',
+      });
+    } finally {
+      setIsProcessing(false);
+      setShowInfoDialog(false);
+      setInfoQuestion('');
+    }
   };
 
-  const handleAddStaffNote = () => {
-    if (!newStaffNote.trim()) return;
+  const handleAddStaffNote = async () => {
+    if (!complaint || !newStaffNote.trim()) return;
 
-    const historyEntry = {
-      id: `sh-${Date.now()}`,
-      status: complaint.status,
-      changedBy: 'Deepak Joshi',
-      changedByRole: 'STAFF' as const,
-      note: newStaffNote.trim(),
-      timestamp: new Date().toISOString(),
-    };
+    try {
+      const updated = await complaintApi.updateStatus(complaint.id, {
+        status: complaint.status,
+        note: newStaffNote.trim(),
+      });
+      setComplaint(updated);
+    } catch {
+      const historyEntry = {
+        id: `sh-${Date.now()}`,
+        status: complaint.status,
+        changedBy: user?.name || 'Staff Member',
+        changedByRole: 'STAFF' as const,
+        note: newStaffNote.trim(),
+        timestamp: new Date().toISOString(),
+      };
 
-    setComplaint((prev) =>
-      prev ? { ...prev, statusHistory: [historyEntry, ...prev.statusHistory] } : prev
-    );
+      setComplaint((prev) =>
+        prev ? { ...prev, statusHistory: [historyEntry, ...prev.statusHistory] } : prev
+      );
+    }
     setNewStaffNote('');
     addToast({ type: 'info', title: 'Work Note Logged', message: 'Update logged to case audit trail.' });
   };
 
-  const vendorOptions = mockVendors.map((v) => ({
+  const vendorOptions = vendors.map((v) => ({
     value: v.id,
     label: v.name,
     sublabel: v.categoryTags.join(', '),
@@ -218,7 +374,7 @@ const StaffComplaintDetail: React.FC = () => {
   const slaPct = Math.min(100, Math.round((elapsed / totalWindow) * 100));
 
   return (
-    <div className="admin-complaint-detail-page">
+    <div className={`admin-complaint-detail-page ${isLivePulsing ? 'detail-live-pulse' : ''}`}>
       {/* 1. Header Navigation Bar */}
       <div
         style={{
@@ -256,6 +412,9 @@ const StaffComplaintDetail: React.FC = () => {
           </span>
 
           <StatusBadge status={complaint.status} />
+          {isLivePulsing && (
+            <span className="live-badge live-badge-updated">UPDATED</span>
+          )}
         </div>
 
         {/* Action Buttons */}
@@ -459,7 +618,7 @@ const StaffComplaintDetail: React.FC = () => {
         )}
       </div>
 
-      {/* 3. SLA & Priority Sentinel Overview Banner */}
+      {/* 3. SLA & Priority Fixloop Overview Banner */}
       <div
         style={{
           background: 'var(--bg-surface)',

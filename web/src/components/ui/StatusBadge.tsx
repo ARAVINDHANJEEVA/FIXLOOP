@@ -1,6 +1,17 @@
 import React from 'react';
 import { ComplaintStatus } from '../../types';
-import { statusLabels } from '../../data/mockData';
+
+const statusLabels: Record<ComplaintStatus, string> = {
+  SUBMITTED: 'Submitted',
+  UNDER_ADMIN_REVIEW: 'Under Admin Review',
+  ASSIGNED: 'Assigned',
+  IN_PROGRESS: 'In Progress',
+  AWAITING_STUDENT_INFO: 'Awaiting Info',
+  VENDOR_ASSIGNED: 'Vendor Assigned',
+  RESOLVED: 'Resolved',
+  REOPENED: 'Reopened',
+  CLOSED: 'Closed',
+};
 
 interface StatusBadgeProps {
   status: ComplaintStatus;

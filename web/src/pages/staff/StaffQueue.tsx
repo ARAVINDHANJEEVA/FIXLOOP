@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ClipboardList,
@@ -14,23 +14,27 @@ import {
   Sparkles,
   X,
 } from 'lucide-react';
-import { mockComplaints, mockCategories } from '../../data/mockData';
-import { Complaint } from '../../types';
+import { Complaint, Category } from '../../types';
+import { complaintApi, categoryApi } from '../../api';
 import LoadingSkeleton from '../../components/ui/LoadingSkeleton';
 import ComplaintRow from '../../components/complaint/ComplaintRow';
 import CustomSelect, { SelectOption } from '../../components/ui/CustomSelect';
+import ErrorState from '../../components/ui/ErrorState';
 import { useToast } from '../../hooks/useToast';
-
-const STAFF_ID = 'stf-5';
+import { useRealtime } from '../../context/RealtimeContext';
 
 type TabKey = 'ALL' | 'ASSIGNED' | 'IN_PROGRESS' | 'AWAITING_STUDENT_INFO' | 'VENDOR_ASSIGNED' | 'RESOLVED';
 
 const StaffQueue: React.FC = () => {
   const { addToast } = useToast();
+  const { subscribeQueue } = useRealtime();
+  const [highlightedMap, setHighlightedMap] = useState<Record<string, 'NEW' | 'UPDATED'>>({});
 
   const [activeTab, setActiveTab] = useState<TabKey>('ALL');
   const [isLoading, setIsLoading] = useState(true);
+  const [isError, setIsError] = useState(false);
   const [complaints, setComplaints] = useState<Complaint[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [selectedSlaFilter, setSelectedSlaFilter] = useState<'ALL' | 'AT_RISK' | 'BREACHED'>('ALL');
@@ -43,32 +47,67 @@ const StaffQueue: React.FC = () => {
   const itemsPerPage = 7;
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setComplaints(mockComplaints.filter((c) => c.assignedToStaffId === STAFF_ID));
+    const unsubscribe = subscribeQueue((event) => {
+      const incoming = event.complaint;
+      if (!incoming || (!incoming.id && !incoming.token)) return;
+
+      const targetId = incoming.id || incoming.token;
+      const highlightType: 'NEW' | 'UPDATED' = event.type === 'NEW' ? 'NEW' : 'UPDATED';
+
+      setComplaints((prev) => {
+        const index = prev.findIndex(
+          (c) => (incoming.id && c.id === incoming.id) || (incoming.token && c.token === incoming.token)
+        );
+        if (index >= 0) {
+          const updated = [...prev];
+          updated[index] = { ...updated[index], ...incoming };
+          return updated;
+        } else {
+          return [incoming, ...prev];
+        }
+      });
+
+      setHighlightedMap((prev) => ({ ...prev, [targetId]: highlightType }));
+      setTimeout(() => {
+        setHighlightedMap((prev) => {
+          const next = { ...prev };
+          delete next[targetId];
+          return next;
+        });
+      }, 4500);
+    });
+
+    return unsubscribe;
+  }, [subscribeQueue]);
+
+  const loadStaffQueue = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      setIsError(false);
+      const [queueRes, catsRes] = await Promise.all([
+        complaintApi.getStaffQueue(),
+        categoryApi.getAll(),
+      ]);
+
+      setComplaints(queueRes.content || []);
+      setCategories(catsRes || []);
+    } catch {
+      setIsError(true);
+    } finally {
       setIsLoading(false);
-    }, 350);
-    return () => clearTimeout(timer);
+    }
   }, []);
 
-  // Periodic assignment simulation
   useEffect(() => {
-    const timer = setTimeout(() => {
-      addToast({
-        type: 'info',
-        title: 'New ticket assigned',
-        message: 'SNT-2026-000220 — WiFi outage in Lab CS-306 has been assigned to you',
-        duration: 5000,
-      });
-    }, 25000);
-    return () => clearTimeout(timer);
-  }, [addToast]);
+    loadStaffQueue();
+  }, [loadStaffQueue]);
 
   const categoryOptions: SelectOption[] = useMemo(() => [
     { value: 'ALL', label: 'All Categories' },
-    ...mockCategories
+    ...categories
       .filter((c) => !c.sensitive)
       .map((cat) => ({ value: cat.name, label: cat.name })),
-  ], []);
+  ], [categories]);
 
   const slaOptions: SelectOption[] = useMemo(() => [
     { value: 'ALL', label: 'All Deadlines' },
@@ -557,6 +596,14 @@ const StaffQueue: React.FC = () => {
           <div style={{ padding: '32px 24px' }}>
             <LoadingSkeleton rows={5} type="row" />
           </div>
+        ) : isError ? (
+          <div style={{ padding: '32px 24px' }}>
+            <ErrorState
+              title="Failed to Load Assigned Queue"
+              message="Could not load complaints assigned to you from the server. Please check your network connection."
+              onRetry={loadStaffQueue}
+            />
+          </div>
         ) : filtered.length === 0 ? (
           <div className="empty-state-container">
             <div className="empty-state-icon">
@@ -600,6 +647,7 @@ const StaffQueue: React.FC = () => {
                       key={c.id}
                       complaint={c}
                       role="staff"
+                      highlightType={highlightedMap[c.id] || highlightedMap[c.token] || null}
                     />
                   ))}
                 </AnimatePresence>
@@ -609,7 +657,7 @@ const StaffQueue: React.FC = () => {
         )}
 
         {/* Bottom Pagination Bar (Matching Admin Table Pagination) */}
-        {!isLoading && filtered.length > 0 && (
+        {!isLoading && !isError && filtered.length > 0 && (
           <div className="management-pagination-bar">
             <div className="pagination-info">
               Showing {(currentPage - 1) * itemsPerPage + 1}–{Math.min(currentPage * itemsPerPage, filtered.length)} of {filtered.length} complaints

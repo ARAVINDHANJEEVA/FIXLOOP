@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
 import { AuthUser } from '../types';
+import { authApi } from '../api/authApi';
 
 interface AuthContextType {
   user: AuthUser | null;
@@ -10,47 +11,33 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-const MOCK_USERS: Record<string, AuthUser & { password: string }> = {
-  'admin@sentinel.edu': {
-    id: 'adm-1',
-    name: 'Admin Krishnan',
-    email: 'admin@sentinel.edu',
-    password: 'admin123',
-    role: 'ADMIN',
-    restrictedAccess: true,
-    avatarInitials: 'AK',
-  },
-  'staff@sentinel.edu': {
-    id: 'stf-5',
-    name: 'Deepak Joshi',
-    email: 'staff@sentinel.edu',
-    password: 'staff123',
-    role: 'STAFF',
-    avatarInitials: 'DJ',
-  },
-};
-
+// Fallback users for offline development when backend server is not running
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<AuthUser | null>(() => {
-    const saved = sessionStorage.getItem('sentinel_user');
-    return saved ? JSON.parse(saved) : null;
-  });
+  const [user, setUser] = useState<AuthUser | null>(() => authApi.getStoredUser());
+
+  // Listen for unauthorized 401 events from the API client
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      setUser(null);
+      authApi.logout();
+    };
+    window.addEventListener('fixloop:unauthorized', handleUnauthorized);
+    return () => window.removeEventListener('fixloop:unauthorized', handleUnauthorized);
+  }, []);
 
   const login = useCallback(async (email: string, password: string) => {
-    await new Promise((res) => setTimeout(res, 800));
-    const found = MOCK_USERS[email.toLowerCase()];
-    if (!found || found.password !== password) {
-      return { success: false, error: 'Invalid credentials. Please try again.' };
+    const result = await authApi.login(email, password);
+    if (result.success && result.user) {
+      setUser(result.user);
+      return { success: true };
     }
-    const { password: _, ...authUser } = found;
-    setUser(authUser);
-    sessionStorage.setItem('sentinel_user', JSON.stringify(authUser));
-    return { success: true };
+
+    return { success: false, error: result.error || 'Invalid email or password' };
   }, []);
 
   const logout = useCallback(() => {
     setUser(null);
-    sessionStorage.removeItem('sentinel_user');
+    authApi.logout();
   }, []);
 
   return (
