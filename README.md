@@ -1,36 +1,43 @@
 # FIXLOOP — Unified Campus Incident Resolution & Triage Platform
 
-FixLoop is an enterprise-grade campus grievance management platform that provides a single point of intake for students, central triage with dynamic priority scoring for administrators, and scoped dispatch queues for workforce staff.
+FixLoop is an enterprise-grade campus grievance and incident management platform that provides a single point of intake for students, central triage with dynamic priority scoring for administrators, and scoped dispatch queues for workforce staff.
 
 ---
 
-## 1. Repository Architecture
+## 1. System Architecture & Directory Structure
 
 ```
 FIXLOOP/
-├── backend/                 # Spring Boot 3.3.x (Java 21, Spring Security, JPA, WebSocket)
-├── web/                     # React + TypeScript Dashboard (Admin Central Triage & Staff Queue)
-├── mobile/                  # Android Student Application (Kotlin & Jetpack Compose)
-├── docker/                  # Docker Compose Infrastructure (PostgreSQL 16)
+├── backend/                 # Spring Boot 3.3.x (Java 21, Spring Security, JPA/Hibernate, WebSocket)
+├── web/                     # React 18 + TypeScript Dashboard (Admin Central Triage & Staff Queue)
+├── mobile/                  # Android Student Application (Kotlin & Jetpack Compose, Material 3)
+├── docker/                  # Docker Compose Infrastructure (PostgreSQL 16 Alpine)
+│   ├── docker-compose.yml
+│   └── .env.example
+├── mdns_publisher.py        # Zeroconf mDNS publisher for automatic mobile LAN discovery
+├── start-mdns.bat           # 1-click launcher for mDNS publisher (no manual IP required)
+├── run-all.bat / .ps1       # 1-click launcher for Full Stack (PostgreSQL + Backend + Frontend)
+├── run-backend.bat / .ps1   # 1-click launcher for Backend + Database only
+├── stop-all.bat / .ps1      # 1-click script to safely terminate all FixLoop services
 └── README.md
 ```
 
 ---
 
-## 2. Component Directory Overview
+## 2. Technology Stack
 
-| Directory | Stack | Description |
+| Subsystem | Technologies & Libraries | Key Features |
 |---|---|---|
-| [`web/`](./web) | React 18, TypeScript, Framer Motion, Recharts | Shared administrative and staff portal with role-based routing (`/admin/*`, `/staff/*`), real-time global search (`Ctrl+K`), confidential vaults (Anti-Ragging, Harassment, Malpractice), and dynamic formula inspection. |
-| [`backend/`](./backend) | Spring Boot 3.3, Java 21, JPA/Hibernate, PostgreSQL, STOMP | RESTful API and WebSocket backend managing authentication, role-based JWT clearance, SLA escalation cron jobs, and intelligent dispatch. |
-| [`mobile/`](./mobile) | Kotlin, Jetpack Compose, Retrofit, Room, FCM | Native Android student mobile application supporting dynamic category forms, token tracking, offline drafts, and push updates. |
-| [`docker/`](./docker) | Docker Compose, PostgreSQL 16 Alpine | Local database container with persistent named volume and health checks. |
+| **Backend API** | Java 21, Spring Boot 3.3.3, Spring Security 6, Spring Data JPA, Flyway, PostgreSQL | Stateless JWT authentication, role-based access control, dynamic priority calculation, TF-IDF cosine similarity clustering, SLA deadline monitoring cron jobs, and STOMP WebSocket broadcasting. |
+| **Web Dashboard** | React 18, TypeScript, Tailwind CSS, Lucide Icons, Recharts, Framer Motion | Role-based portal (`/admin/*`, `/staff/*`), real-time queue synchronization, multi-attribute filter group, cluster inspection panel, and dynamic priority weight tuning. |
+| **Mobile App** | Kotlin 1.9, Jetpack Compose, Retrofit 2, OkHttp 3, Coroutines & Flow | Neo-brutalism design, zero-config mDNS backend discovery, student authentication, offline draft support, camera photo attachments, and real-time status timelines. |
+| **Infrastructure** | Docker, Docker Compose, PostgreSQL 16 | Containerized relational database with persistent named volumes and healthcheck probe. |
 
 ---
 
 ## 3. Dynamic Priority Scoring Engine
 
-FixLoop computes priority through a multi-factor normalized equation:
+FixLoop automatically ranks campus grievances using a normalized multi-factor priority algorithm:
 
 $$\begin{aligned}
 \text{severity\_norm} &= \frac{\text{severity}}{5} \\
@@ -41,65 +48,106 @@ $$\begin{aligned}
 &\quad + (0.08 \times \text{recurrence\_norm}) + (0.23 \times \text{time\_urgency\_norm})
 \end{aligned}$$
 
----
-
-## 4. Quick Start Guide
-
-### 4.0 One-Click Launch (Recommended for Windows)
-
-From the project root directory, you can start everything with a single command or by double-clicking:
-
-- **Run Full Stack (Database + Backend + Frontend)**:
-  ```cmd
-  run-all.bat
-  ```
-  *(Or in PowerShell: `.\run-all.ps1`)*
-
-- **Run Backend Only (Database + Spring Boot)**:
-  ```cmd
-  run-backend.bat
-  ```
-  *(Or in PowerShell: `.\run-backend.ps1`)*
-
-- **Stop All Services (Backend + Frontend + Database)**:
-  ```cmd
-  stop-all.bat
-  ```
-  *(Or in PowerShell: `.\stop-all.ps1`)*
-
-The scripts automatically detect Java 21, verify/start the PostgreSQL container, and launch the services in separate designated terminal windows.
+Weights ($w_1=0.48, w_2=0.21, w_3=0.08, w_4=0.23$) can be adjusted in real-time by administrators via the Web Settings panel.
 
 ---
 
-### 4.1 Database (Docker)
+## 4. Quick Start (Windows Convenience Scripts)
+
+FixLoop includes automated scripts in the root directory for fast local development:
+
+| Script | Purpose |
+|---|---|
+| `run-all.bat` / `.\run-all.ps1` | Launches PostgreSQL in Docker, starts the Spring Boot backend on `:8080`, and runs the React frontend on `:3000` in dedicated windows. |
+| `run-backend.bat` / `.\run-backend.ps1` | Ensures PostgreSQL container is healthy and starts the backend service. |
+| `stop-all.bat` / `.\stop-all.ps1` | Stops processes listening on ports `8080` and `3000` and shuts down the PostgreSQL container. |
+| `start-mdns.bat` | Starts the mDNS daemon so physical Android phones automatically resolve `http://fixloop.local:8080/`. |
+
+---
+
+## 5. Manual Setup & Running Instructions
+
+### 5.1 Prerequisites
+- **Java Development Kit (JDK)**: Version 21 (or Android Studio JBR)
+- **Node.js**: Version 18+ and `npm`
+- **Docker Desktop**: Running and configured for Linux containers
+- **Android Studio**: Ladybug / Koala (for building the mobile app)
+- **Python 3.9+**: Optional, only required for running `mdns_publisher.py`
+
+### 5.2 Step 1: Database Setup (Docker)
 ```bash
 cd docker
 docker compose up -d
 ```
-Database URL: `jdbc:postgresql://localhost:5432/fixloop_db` (user: `fixloop_user`, password: `fixloop_secret`)
+- **Host**: `localhost:5432`
+- **Database**: `fixloop_db`
+- **User**: `fixloop_user`
+- **Password**: `fixloop_secret` (default local dev password, override via env in production)
 
-### 4.2 Web Dashboard (React)
+### 5.3 Step 2: Backend Service (Spring Boot)
+```bash
+cd backend
+# On Windows
+mvnw.cmd spring-boot:run
+# On Linux/macOS
+./mvnw spring-boot:run
+```
+- The backend will automatically apply database migrations via Flyway and seed initial administrative categories and accounts.
+- Base URL: `http://localhost:8080`
+- Health check: `http://localhost:8080/api/health`
+
+### 5.4 Step 3: Web Dashboard (React)
 ```bash
 cd web
 npm install
 npm start
 ```
-Runs at `http://localhost:3000`. Test accounts:
-- **Admin**: `admin@fixloop.edu`
-- **Staff**: `staff@fixloop.edu`
+- Base URL: `http://localhost:3000`
 
-### 4.3 Backend Service (Spring Boot)
-```bash
-cd backend
-./mvnw spring-boot:run
-```
-Runs at `http://localhost:8080`.
+### 5.5 Step 4: Mobile Application (Android)
 
-### 4.4 Mobile App (Kotlin)
-Connect your Android phone wirelessly via ADB and reverse the port:
-```bash
-adb pair <PHONE_IP>:<PORT>
-adb connect <PHONE_IP>:<PORT>
-adb reverse tcp:8080 tcp:8080
-```
-Open `mobile/` in Android Studio and run on device.
+Open the `mobile/` directory in Android Studio.
+
+#### Connecting the Mobile App to the Backend:
+1. **Android Emulator**:
+   - Select **Emulator Mode** in the app settings screen.
+   - Automatically connects to `http://10.0.2.2:8080/`.
+2. **Physical Device over Wi-Fi (Zero-Configuration with mDNS)**:
+   - Run `start-mdns.bat` (or `python mdns_publisher.py`) on your development machine.
+   - Ensure phone and laptop are on the same Wi-Fi / hotspot.
+   - The app will resolve the backend at `http://fixloop.local:8080/`.
+3. **Physical Device via USB ADB Reverse**:
+   ```bash
+   adb reverse tcp:8080 tcp:8080
+   ```
+   - Connects to `http://localhost:8080/`.
+
+---
+
+## 6. Seed Accounts & Default Credentials
+
+| Role | Email | Password | Access Scope |
+|---|---|---|---|
+| **Administrator** | `admin@fixloop.edu` | `admin123` | Full dashboard access, dynamic weights, staff management, cluster actions, and analytics. |
+| **Workforce Staff** | `staff@fixloop.edu` | `staff123` | Scoped department queues, status updates, photo proof uploads, and work logs. |
+| **Student** | Dynamic / `student@fixloop.edu` | `student123` | Grievance intake, tracking, timeline updates, feedback, and reviews. |
+
+---
+
+## 7. Production Deployment & Security
+
+- **Environment Configuration**: Copy `docker/.env.example` to `docker/.env` and configure strong passwords and a secure JWT secret:
+  ```bash
+  POSTGRES_DB=fixloop_db
+  POSTGRES_USER=fixloop_user
+  POSTGRES_PASSWORD=your_strong_db_password
+  JWT_SECRET=your_base64_encoded_256_bit_secret
+  ```
+- **Protected Exclusions**: All `.env` files, internal architecture plans (`plan/`, `plans/`), private keys (`*.pem`, `*.key`, `*.jks`), IDE configurations, and internal developer documentation are excluded from version control via `.gitignore`.
+- **Stateless Authentication**: Microservice-ready stateless JWT validation with BCrypt password hashing.
+
+---
+
+## 8. License
+
+This project is licensed under the MIT License — see the [`LICENSE`](./LICENSE) file for details.
